@@ -25,9 +25,10 @@ public class OnDeviceLlmService implements ILlmService {
 
         File modelFile = new File(modelPath);
         if (!modelFile.exists()) {
-            System.err.println("OnDeviceLlmService: Model file not found at " + modelPath);
-            // In a real app, you might copy from assets here.
-            return;
+            // NOTE: This usually catches the case where the file hasn't been pushed or copied yet.
+            // MainActivity displays a warning, but if we try to run anyway:
+            throw new RuntimeException("Model file MISSING at path: " + modelPath +
+                "\nSee app screen for instructions.");
         }
 
         LlmInference.LlmInferenceOptions options = LlmInference.LlmInferenceOptions.builder()
@@ -36,7 +37,15 @@ public class OnDeviceLlmService implements ILlmService {
                 // .setResultThreshold(0.5f)
                 .build();
 
-        llmInference = LlmInference.createFromOptions(context, options);
+        try {
+            llmInference = LlmInference.createFromOptions(context, options);
+        } catch (Throwable t) {
+            String msg = "Failed to initialize On-Device LLM. \n" +
+                         "If you are running on an Emulator, this is expected (MediaPipe GenAI supports ARM64 devices only).\n" +
+                         "Error: " + t.getMessage();
+            System.err.println(msg);
+            throw new RuntimeException(msg, t);
+        }
     }
 
     @Override
@@ -48,13 +57,23 @@ public class OnDeviceLlmService implements ILlmService {
             }
         }
 
-        // MediaPipe LlmInference usually takes a single prompt string.
-        // We need to format it manually according to the model's template (e.g. Gemma format).
-        // This is a simplified "ChatML" style or "Instruction" style concatenation.
-        String fullPrompt = systemPrompt + "\n\nUser: " + userMessage + "\nModel:";
+        // Format prompt for Gemma:
+        // <start_of_turn>user
+        // {system_prompt}
+        //
+        // {user_message}<end_of_turn>
+        // <start_of_turn>model
+        String fullPrompt = "<start_of_turn>user\n" +
+                            systemPrompt + "\n\n" +
+                            "Input text:\n" + userMessage + "<end_of_turn>\n" +
+                            "<start_of_turn>model\n";
+
+        System.out.println("LLM Input: " + fullPrompt);
 
         try {
-            return llmInference.generateResponse(fullPrompt);
+            String result = llmInference.generateResponse(fullPrompt);
+            System.out.println("LLM Output: " + result);
+            return result;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
