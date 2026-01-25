@@ -19,10 +19,18 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Philotes 智能日程助手"
+            android:text="Philotes - Snap2Action"
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="智能文本解析 · 一键执行"
+            android:textSize="14sp"
+            android:textColor="#666666"
             android:layout_marginBottom="16dp" />
 
         <!-- ======================= AI LLM SECTION (From llm branch) ======================= -->
@@ -43,7 +51,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🤖 AI 指令解析"
+                    android:text="🤖 智能解析引擎"
                     android:textStyle="bold"
                     android:textColor="#4A148C"
                     android:layout_marginBottom="8dp"/>
@@ -52,7 +60,7 @@
                     android:id="@+id/etInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="输入指令 (例: 明天下午2点开会)"
+                    android:hint="输入文本，自动识别意图并执行"
                     android:background="@android:color/white"
                     android:padding="8dp"
                     android:minHeight="48dp" />
@@ -61,7 +69,7 @@
                     android:id="@+id/btnParse"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="解析指令"
+                    android:text="🚀 解析并执行"
                     android:layout_marginTop="8dp"/>
 
                 <!-- Model Download UI -->
@@ -102,7 +110,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="解析结果 (Raw JSON):"
+                    android:text="原始 JSON (调试用):"
                     android:textSize="12sp"
                     android:layout_marginTop="8dp"/>
 
@@ -111,11 +119,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:background="#FFFFFF"
                     android:padding="4dp"
                     android:minLines="2"
-                    android:text="..." />
+                    android:maxLines="6"
+                    android:scrollbars="vertical"
+                    android:text="等待解析..." />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -124,7 +134,7 @@
         <!-- 模拟截图预览区域 -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
-            android:layout_height="120dp"
+            android:layout_height="100dp"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="4dp">
@@ -146,7 +156,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
-                    android:text="📷 模拟数据来源\n(Visual Preview)"
+                    android:text="📸 屏幕截图区域\n(未来支持 OCR)"
                     android:textAlignment="center"
                     android:textColor="#888888"
                     android:textSize="14sp" />
@@ -161,7 +171,7 @@
             android:layout_marginBottom="24dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="#E3F2FD">
+            app:cardBackgroundColor="#E8F5E9">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -172,59 +182,23 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🔍 格式化结果"
+                    android:text="✨ 动作摘要"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:textColor="#1976D2"
+                    android:textColor="#2E7D32"
                     android:layout_marginBottom="8dp" />
 
                 <TextView
                     android:id="@+id/recognitionResult"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="等待解析..."
+                    android:text="请输入文本并点击解析按钮\n\nMock 测试模式：\n输入 1 = 创建日历事件\n输入 2 = 开始导航\n输入 3 = 添加待办"
                     android:textSize="14sp"
                     android:textColor="#333333"
                     android:lineSpacingExtra="4dp" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
-
-        <!-- 功能按钮区域 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="执行操作"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
-
-        <Button
-            android:id="@+id/btnCreateCalendar"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginBottom="12dp"
-            android:text="📅  创建日历事件"
-            android:textSize="16sp"
-            android:backgroundTint="#4CAF50" />
-
-        <Button
-            android:id="@+id/btnOpenNavigation"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginBottom="12dp"
-            android:text="🗺️  打开导航"
-            android:textSize="16sp"
-            android:backgroundTint="#2196F3" />
-
-        <Button
-            android:id="@+id/btnCreateTodo"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginBottom="24dp"
-            android:text="✅  添加待办事项"
-            android:textSize="16sp"
-            android:backgroundTint="#FF9800" />
 
         <!-- 状态信息 -->
         <TextView

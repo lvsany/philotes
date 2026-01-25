@@ -1,4 +1,4 @@
-package com.example.philotes;
+package com.example.philotes.helper;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -7,38 +7,42 @@ import android.net.Uri;
 import android.provider.CalendarContract;
 import android.util.Log;
 
+import com.example.philotes.data.model.ActionPlan;
+
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 
 /**
  * 日历事件创建助手类
- * 使用硬编码数据创建日历事件
+ * 根据 ActionPlan 创建日历事件
  */
 public class CalendarHelper {
 
     private static final String TAG = "CalendarHelper";
 
-    // 硬编码的事件数据
-    public static final String EVENT_TITLE = "项目会议";
-    public static final String EVENT_LOCATION = "望京SOHO 会议室A";
-    public static final String EVENT_DESCRIPTION = "讨论项目进度，准备会议材料";
-
-    // 事件时间: 2026-01-25 14:00 - 15:00
-    public static final int EVENT_YEAR = 2026;
-    public static final int EVENT_MONTH = Calendar.JANUARY; // 0-indexed
-    public static final int EVENT_DAY = 25;
-    public static final int EVENT_START_HOUR = 14;
-    public static final int EVENT_START_MINUTE = 0;
-    public static final int EVENT_END_HOUR = 15;
-    public static final int EVENT_END_MINUTE = 0;
-
     /**
-     * 创建日历事件
+     * 根据 ActionPlan 创建日历事件
      *
      * @param context 上下文
+     * @param actionPlan 动作计划
      * @return 创建成功返回事件URI，失败返回null
      */
-    public static Uri createCalendarEvent(Context context) {
+    public static Uri createCalendarEvent(Context context, ActionPlan actionPlan) {
+        if (actionPlan == null || actionPlan.getSlots() == null) {
+            Log.e(TAG, "ActionPlan 或 slots 为空");
+            return null;
+        }
+
+        Map<String, String> slots = actionPlan.getSlots();
+        String title = slots.getOrDefault("title", "新事件");
+        String timeStr = slots.get("time");
+        String location = slots.getOrDefault("location", "");
+        String content = slots.getOrDefault("content", "");
+
         try {
             // 获取日历ID（使用第一个可用的日历）
             long calendarId = getFirstCalendarId(context);
@@ -47,21 +51,24 @@ public class CalendarHelper {
                 return null;
             }
 
-            // 计算事件开始和结束时间
-            Calendar startTime = Calendar.getInstance();
-            startTime.set(EVENT_YEAR, EVENT_MONTH, EVENT_DAY, EVENT_START_HOUR, EVENT_START_MINUTE, 0);
-            startTime.set(Calendar.MILLISECOND, 0);
+            // 解析时间
+            Calendar startTime = parseTime(timeStr);
+            if (startTime == null) {
+                // 如果没有时间，使用当前时间+1小时
+                startTime = Calendar.getInstance();
+                startTime.add(Calendar.HOUR_OF_DAY, 1);
+            }
 
-            Calendar endTime = Calendar.getInstance();
-            endTime.set(EVENT_YEAR, EVENT_MONTH, EVENT_DAY, EVENT_END_HOUR, EVENT_END_MINUTE, 0);
-            endTime.set(Calendar.MILLISECOND, 0);
+            // 结束时间默认为开始时间+1小时
+            Calendar endTime = (Calendar) startTime.clone();
+            endTime.add(Calendar.HOUR_OF_DAY, 1);
 
             // 创建事件内容
             ContentValues values = new ContentValues();
             values.put(CalendarContract.Events.CALENDAR_ID, calendarId);
-            values.put(CalendarContract.Events.TITLE, EVENT_TITLE);
-            values.put(CalendarContract.Events.DESCRIPTION, EVENT_DESCRIPTION);
-            values.put(CalendarContract.Events.EVENT_LOCATION, EVENT_LOCATION);
+            values.put(CalendarContract.Events.TITLE, title);
+            values.put(CalendarContract.Events.DESCRIPTION, content);
+            values.put(CalendarContract.Events.EVENT_LOCATION, location);
             values.put(CalendarContract.Events.DTSTART, startTime.getTimeInMillis());
             values.put(CalendarContract.Events.DTEND, endTime.getTimeInMillis());
             values.put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
@@ -135,15 +142,27 @@ public class CalendarHelper {
     }
 
     /**
-     * 获取事件信息的格式化字符串
+     * 解析时间字符串为 Calendar 对象
+     * 支持 ISO 8601 格式: YYYY-MM-DDTHH:MM:SS
      */
-    public static String getEventSummary() {
-        return String.format("📅 %s\n⏰ %d年%d月%d日 %02d:%02d-%02d:%02d\n📍 %s\n📝 %s",
-                EVENT_TITLE,
-                EVENT_YEAR, EVENT_MONTH + 1, EVENT_DAY,
-                EVENT_START_HOUR, EVENT_START_MINUTE,
-                EVENT_END_HOUR, EVENT_END_MINUTE,
-                EVENT_LOCATION,
-                EVENT_DESCRIPTION);
+    private static Calendar parseTime(String timeStr) {
+        if (timeStr == null || timeStr.isEmpty()) {
+            return null;
+        }
+
+        try {
+            // 尝试解析 ISO 8601 格式
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            Date date = sdf.parse(timeStr);
+            if (date != null) {
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTime(date);
+                return calendar;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "解析时间失败: " + timeStr, e);
+        }
+
+        return null;
     }
 }
