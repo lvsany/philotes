@@ -23,12 +23,108 @@
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/black"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="16dp" />
+
+        <!-- ======================= AI LLM SECTION (From llm branch) ======================= -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="#F3E5F5">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🤖 AI 指令解析"
+                    android:textStyle="bold"
+                    android:textColor="#4A148C"
+                    android:layout_marginBottom="8dp"/>
+
+                <EditText
+                    android:id="@+id/etInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="输入指令 (例: 明天下午2点开会)"
+                    android:background="@android:color/white"
+                    android:padding="8dp"
+                    android:minHeight="48dp" />
+
+                <Button
+                    android:id="@+id/btnParse"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="解析指令"
+                    android:layout_marginTop="8dp"/>
+
+                <!-- Model Download UI -->
+                <LinearLayout
+                    android:id="@+id/layoutDownload"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_marginTop="8dp"
+                    android:background="#FFEBEE"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:id="@+id/tvDownloadStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Model missing. Download required."
+                        android:textColor="#D32F2F"
+                        android:gravity="center"/>
+
+                    <ProgressBar
+                        android:id="@+id/progressBar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:max="100" />
+
+                    <Button
+                        android:id="@+id/btnDownload"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Download AI Model"
+                        android:layout_marginTop="8dp"/>
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="解析结果 (Raw JSON):"
+                    android:textSize="12sp"
+                    android:layout_marginTop="8dp"/>
+
+                <TextView
+                    android:id="@+id/tvResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textSize="12sp"
+                    android:background="#FFFFFF"
+                    android:padding="4dp"
+                    android:minLines="2"
+                    android:text="..." />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ======================= ORIGINAL UI SECTION (From HEAD) ======================= -->
 
         <!-- 模拟截图预览区域 -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
-            android:layout_height="200dp"
+            android:layout_height="120dp"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="4dp">
@@ -50,10 +146,10 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
-                    android:text="📷 截图预览区域\n（模拟数据模式）"
+                    android:text="📷 模拟数据来源\n(Visual Preview)"
                     android:textAlignment="center"
                     android:textColor="#888888"
-                    android:textSize="16sp" />
+                    android:textSize="14sp" />
 
             </FrameLayout>
         </androidx.cardview.widget.CardView>
@@ -76,7 +172,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🔍 识别结果"
+                    android:text="🔍 格式化结果"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#1976D2"
@@ -86,7 +182,7 @@
                     android:id="@+id/recognitionResult"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="事件: 项目会议\n时间: 2026-01-25 14:00-15:00\n地点: 望京SOHO 会议室A\n备注: 讨论项目进度，准备材料"
+                    android:text="等待解析..."
                     android:textSize="14sp"
                     android:textColor="#333333"
                     android:lineSpacingExtra="4dp" />
@@ -98,12 +194,11 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="选择操作"
+            android:text="执行操作"
             android:textSize="16sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
-        <!-- 创建日历事件按钮 -->
         <Button
             android:id="@+id/btnCreateCalendar"
             android:layout_width="match_parent"
@@ -113,7 +208,6 @@
             android:textSize="16sp"
             android:backgroundTint="#4CAF50" />
 
-        <!-- 打开导航按钮 -->
         <Button
             android:id="@+id/btnOpenNavigation"
             android:layout_width="match_parent"
@@ -123,7 +217,6 @@
             android:textSize="16sp"
             android:backgroundTint="#2196F3" />
 
-        <!-- 添加待办事项按钮 -->
         <Button
             android:id="@+id/btnCreateTodo"
             android:layout_width="match_parent"
