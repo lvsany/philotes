@@ -1,76 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
     tools:context=".MainActivity">
-
     <LinearLayout
-        android:id="@+id/main"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="24dp"
-        android:gravity="center_horizontal">
-
-        <!-- 标题 -->
+        android:padding="16dp">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Philotes - Snap2Action"
+            android:text="Snap2Action"
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/black"
-            android:layout_marginBottom="8dp" />
-
+            android:layout_marginBottom="4dp" />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="智能文本解析 · 一键执行"
+            android:text="屏幕理解一键代办"
             android:textSize="14sp"
             android:textColor="#666666"
             android:layout_marginBottom="16dp" />
-
-        <!-- ======================= AI LLM SECTION (From llm branch) ======================= -->
+        <!-- 输入区域 -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="16dp"
             app:cardCornerRadius="8dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="#F3E5F5">
-
+            app:cardElevation="2dp">
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="12dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🤖 智能解析引擎"
-                    android:textStyle="bold"
-                    android:textColor="#4A148C"
-                    android:layout_marginBottom="8dp"/>
-
                 <EditText
                     android:id="@+id/etInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="输入文本，自动识别意图并执行"
-                    android:background="@android:color/white"
-                    android:padding="8dp"
+                    android:hint="输入或分享文本到这里..."
+                    android:background="@android:color/transparent"
                     android:minHeight="48dp" />
-
                 <Button
                     android:id="@+id/btnParse"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
+                    android:layout_gravity="end"
                     android:layout_height="wrap_content"
-                    android:text="🚀 解析并执行"
-                    android:layout_marginTop="8dp"/>
+                    android:text="解析执行" />
 
                 <!-- Model Download UI -->
                 <LinearLayout
@@ -107,108 +87,58 @@
                         android:layout_marginTop="8dp"/>
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="原始 JSON (调试用):"
-                    android:textSize="12sp"
-                    android:layout_marginTop="8dp"/>
-
-                <TextView
-                    android:id="@+id/tvResult"
+                <!-- Screenshot Preview Area (Shared Image) -->
+                <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textSize="11sp"
-                    android:background="#FFFFFF"
-                    android:padding="4dp"
-                    android:minLines="2"
-                    android:maxLines="6"
-                    android:scrollbars="vertical"
-                    android:text="等待解析..." />
+                    android:layout_marginTop="8dp">
+
+                     <ImageView
+                        android:id="@+id/screenshotPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="150dp"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/placeholderText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"/>
+                </FrameLayout>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
-
-        <!-- ======================= ORIGINAL UI SECTION (From HEAD) ======================= -->
-
-        <!-- 模拟截图预览区域 -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="#F5F5F5">
-
-                <ImageView
-                    android:id="@+id/screenshotPreview"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/placeholderText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="📸 屏幕截图区域\n(未来支持 OCR)"
-                    android:textAlignment="center"
-                    android:textColor="#888888"
-                    android:textSize="14sp" />
-
-            </FrameLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 识别结果显示区域 -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
+        <!-- 任务卡片列表 -->
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="#E8F5E9">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="✨ 动作摘要"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="#2E7D32"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/recognitionResult"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="请输入文本并点击解析按钮\n\nMock 测试模式：\n输入 1 = 创建日历事件\n输入 2 = 开始导航\n输入 3 = 添加待办"
-                    android:textSize="14sp"
-                    android:textColor="#333333"
-                    android:lineSpacingExtra="4dp" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 状态信息 -->
+            android:text="已生成的建议动作"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvActionCards"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            tools:listitem="@android:layout/simple_list_item_2" />
+        <!-- 状态栏 -->
         <TextView
             android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="准备就绪"
             android:textAlignment="center"
-            android:textColor="#666666"
-            android:textSize="12sp" />
-
+            android:textColor="#999999"
+            android:textSize="12sp"
+            android:padding="8dp" />
     </LinearLayout>
-</ScrollView>
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabEnableFloating"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:src="@android:drawable/ic_menu_add"
+        app:contentDescription="开启悬浮球" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

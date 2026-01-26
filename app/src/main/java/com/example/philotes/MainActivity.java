@@ -1,8 +1,11 @@
 package com.example.philotes;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -16,18 +19,19 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.philotes.data.model.ActionPlan;
 import com.example.philotes.domain.ActionParser;
 import com.example.philotes.domain.ActionExecutor;
 import com.example.philotes.domain.MockActionParser;
 import com.example.philotes.utils.ModelUtils;
-import com.google.gson.GsonBuilder;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 主活动
@@ -38,12 +42,13 @@ public class MainActivity extends AppCompatActivity {
 
     // --- UI Components ---
     private TextView statusText;
-    private TextView recognitionResult;
+    private RecyclerView rvActionCards;
+    private ActionCardAdapter actionCardAdapter;
+    private List<ActionPlan> actionPlanList = new ArrayList<>();
 
     // LLM AI Components
     private EditText etInput;
     private Button btnParse;
-    private TextView tvResult;
 
     // Download UI
     private LinearLayout layoutDownload;
@@ -60,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
 
     // 权限请求启动器
     private ActivityResultLauncher<String[]> requestPermissionLauncher;
+    private ActivityResultLauncher<Intent> overlayPermissionLauncher; // 悬浮窗权限启动器
     private ActionPlan pendingActionPlan; // 等待权限授予后执行的 ActionPlan
 
     @Override
@@ -70,21 +76,20 @@ public class MainActivity extends AppCompatActivity {
         // 初始化执行器
         actionExecutor = new ActionExecutor(this);
 
-        // 设置窗口边距
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
-
         // 初始化视图
         initViews();
 
         // 初始化权限请求
         initPermissionLauncher();
 
+        // 检查悬浮窗权限
+        checkAndRequestOverlayPermission();
+
         // 设置点击事件
         setupClickListeners();
+
+        // 检查 Intent 是否包含分享内容
+        handleIntent(getIntent());
 
         // 检查并初始化模型
         File modelFile = ModelUtils.getModelFile(this);
@@ -105,20 +110,49 @@ public class MainActivity extends AppCompatActivity {
      * 初始化视图组件
      */
     private void initViews() {
-        // 状态和结果显示
+        // 状态显示
         statusText = findViewById(R.id.statusText);
-        recognitionResult = findViewById(R.id.recognitionResult);
 
         // LLM 相关视图
         etInput = findViewById(R.id.etInput);
         btnParse = findViewById(R.id.btnParse);
-        tvResult = findViewById(R.id.tvResult);
+
+        // 卡片列表
+        rvActionCards = findViewById(R.id.rvActionCards);
+        rvActionCards.setLayoutManager(new LinearLayoutManager(this));
+        actionCardAdapter = new ActionCardAdapter(actionPlanList, new ActionCardAdapter.OnActionClickListener() {
+            @Override
+            public void onExecute(ActionPlan plan) {
+                executeAction(plan);
+            }
+
+            @Override
+            public void onEdit(ActionPlan plan) {
+                Intent intent = new Intent(MainActivity.this, ActionDetailActivity.class);
+                intent.putExtra("action_plan", new com.google.gson.Gson().toJson(plan));
+                startActivity(intent);
+            }
+        });
+        rvActionCards.setAdapter(actionCardAdapter);
 
         // 下载界面
         layoutDownload = findViewById(R.id.layoutDownload);
         progressBar = findViewById(R.id.progressBar);
         btnDownload = findViewById(R.id.btnDownload);
         tvDownloadStatus = findViewById(R.id.tvDownloadStatus);
+
+        // FAB 开启悬浮球
+        FloatingActionButton fab = findViewById(R.id.fabEnableFloating);
+        fab.setOnClickListener(v -> {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } else {
+                startService(new Intent(this, FloatingButtonService.class));
+                Toast.makeText(this, "悬浮球已开启", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /**
@@ -128,8 +162,8 @@ public class MainActivity extends AppCompatActivity {
         requestPermissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestMultiplePermissions(),
                 permissions -> {
-                    Boolean readGranted = permissions.getOrDefault(Manifest.permission.READ_CALENDAR, false);
-                    Boolean writeGranted = permissions.getOrDefault(Manifest.permission.WRITE_CALENDAR, false);
+                    boolean readGranted = permissions.getOrDefault(Manifest.permission.READ_CALENDAR, false);
+                    boolean writeGranted = permissions.getOrDefault(Manifest.permission.WRITE_CALENDAR, false);
 
                     if (readGranted && writeGranted) {
                         updateStatus("日历权限已授予");
@@ -144,6 +178,36 @@ public class MainActivity extends AppCompatActivity {
                         pendingActionPlan = null;
                     }
                 });
+
+        overlayPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (Settings.canDrawOverlays(this)) {
+                        Toast.makeText(this, "悬浮窗权限已授予", Toast.LENGTH_SHORT).show();
+                        startService(new Intent(this, FloatingButtonService.class));
+                    } else {
+                        Toast.makeText(this, "悬浮窗权限被拒绝，功能可能受限", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+    }
+
+    /**
+     * 检查并请求悬浮窗权限
+     */
+    private void checkAndRequestOverlayPermission() {
+        if (!Settings.canDrawOverlays(this)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("需要悬浮窗权限")
+                    .setMessage("为了在其他应用中使用Snap2Action，请授予悬浮窗权限。")
+                    .setPositiveButton("去授权", (dialog, which) -> {
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + getPackageName()));
+                        overlayPermissionLauncher.launch(intent);
+                    })
+                    .setNegativeButton("稍后", null)
+                    .show();
+        }
     }
 
     /**
@@ -169,87 +233,42 @@ public class MainActivity extends AppCompatActivity {
      */
     private void showSimulatedRecognitionResult() {
         String result = "请输入文本并点击解析按钮\n\nMock 测试模式：\n输入 1 = 创建日历事件\n输入 2 = 开始导航\n输入 3 = 添加待办";
-        recognitionResult.setText(result);
+        statusText.setText(result);
     }
 
     /**
      * 解析文本并执行动作
      */
     private void performParse(String text) {
-        tvResult.setText("正在解析...");
-        btnParse.setEnabled(false);
-        updateStatus("正在解析输入内容...");
+        statusText.setText("正在解析...");
 
+        // 模拟解析逻辑，增加到列表
         new Thread(() -> {
             try {
+                Thread.sleep(1000); // 假装在思考
                 ActionPlan plan;
-                
-                // 根据模式选择解析器
                 if (useMockParser) {
-                    // 使用 Mock 解析器
                     plan = MockActionParser.parse(text);
-                    runOnUiThread(() -> updateStatus("使用规则解析模式"));
                 } else {
-                    // 使用真实的 LLM 模型
-                    if (actionParser == null) {
-                        runOnUiThread(() -> {
-                            tvResult.setText("模型未就绪，请先下载模型");
-                            btnParse.setEnabled(true);
-                            updateStatus("模型未就绪");
-                        });
-                        return;
-                    }
                     plan = actionParser.parse(text);
-                    runOnUiThread(() -> updateStatus("使用 AI 模型解析"));
                 }
-                
-                if (plan == null) {
+
+                if (plan != null) {
                     runOnUiThread(() -> {
-                        tvResult.setText("解析失败");
-                        btnParse.setEnabled(true);
-                        updateStatus("解析失败");
+                        actionPlanList.add(0, plan);
+                        actionCardAdapter.notifyItemInserted(0);
+                        rvActionCards.scrollToPosition(0);
+                        statusText.setText("解析成功");
                     });
-                    return;
+                } else {
+                    runOnUiThread(() -> statusText.setText("未能识别出动作"));
                 }
-
-                // 显示解析结果
-                String jsonResult = new GsonBuilder().setPrettyPrinting().create().toJson(plan);
-                String summary = ActionExecutor.getActionSummary(plan);
-
-                runOnUiThread(() -> {
-                    tvResult.setText(jsonResult);
-                    recognitionResult.setText(summary);
-                    btnParse.setEnabled(true);
-                    updateStatus("解析完成，准备执行...");
-
-                    // 显示确认对话框
-                    showExecutionConfirmDialog(plan);
-                });
-
             } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> {
-                    tvResult.setText("解析错误: " + e.getMessage());
-                    btnParse.setEnabled(true);
-                    updateStatus("解析出错");
-                });
+                runOnUiThread(() -> statusText.setText("解析失败: " + e.getMessage()));
             }
         }).start();
     }
 
-    /**
-     * 显示执行确认对话框
-     */
-    private void showExecutionConfirmDialog(ActionPlan plan) {
-        String message = ActionExecutor.getActionSummary(plan);
-        
-        new AlertDialog.Builder(this)
-                .setTitle("确认执行")
-                .setMessage(message + "\n\n确认执行此操作吗？")
-                .setPositiveButton("执行", (dialog, which) -> executeAction(plan))
-                .setNegativeButton("取消", (dialog, which) -> updateStatus("已取消"))
-                .show();
-    }
 
     /**
      * 执行动作
@@ -317,13 +336,77 @@ public class MainActivity extends AppCompatActivity {
         statusText.setText(status);
     }
 
+    /**
+     * 处理传入的 Intent
+     */
+    private void handleIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getAction();
+        String type = intent.getType();
+
+        if (Intent.ACTION_SEND.equals(action) && type != null) {
+            if ("text/plain".equals(type)) {
+                handleSharedText(intent);
+            } else if (type.startsWith("image/")) {
+                handleSharedImage(intent);
+            }
+        }
+    }
+
+    private void handleSharedText(Intent intent) {
+        String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+        if (sharedText != null) {
+            etInput.setText(sharedText);
+            // 自动开始解析
+            performParse(sharedText);
+        }
+    }
+
+    private void handleSharedImage(Intent intent) {
+        String imagePath = intent.getStringExtra("image_path");
+        Uri imageUri = null;
+
+        if (imagePath != null) {
+            imageUri = Uri.fromFile(new File(imagePath));
+        } else {
+            imageUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        }
+
+        if (imageUri != null) {
+            // 显示截图预览
+            findViewById(R.id.screenshotPreview).setVisibility(View.VISIBLE);
+            findViewById(R.id.placeholderText).setVisibility(View.GONE);
+            ((android.widget.ImageView)findViewById(R.id.screenshotPreview)).setImageURI(imageUri);
+
+            updateStatus("正在进行 OCR 识别...");
+
+            // 模拟 OCR 过程
+            new Thread(() -> {
+                try {
+                    Thread.sleep(1500); // 模拟网络耗时
+
+                    // 假设 OCR 返回了如下文本
+                    String simulatedOcrText = "明天下午三点在会议室开会讨论项目进度";
+
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "OCR 识别完成", Toast.LENGTH_SHORT).show();
+                        etInput.setText(simulatedOcrText); // 填充到输入框供用户修改
+                        performParse(simulatedOcrText); // 自动开始解析
+                    });
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+
     // --- 模型下载和初始化 ---
 
     private void showDownloadUI() {
         layoutDownload.setVisibility(View.VISIBLE);
         btnParse.setEnabled(true); // Mock 模式下仍可解析
         etInput.setEnabled(true);
-        tvResult.setText("使用规则解析模式（Mock）\n下载模型后可启用 AI 解析");
+        statusText.setText("使用规则解析模式（Mock）\n下载模型后可启用 AI 解析");
     }
 
     private void startDownload(File targetFile) {
@@ -364,7 +447,7 @@ public class MainActivity extends AppCompatActivity {
 
         btnParse.setEnabled(true);
         etInput.setEnabled(true);
-        tvResult.setText("模型已就绪: " + modelFile.getName());
+        statusText.setText("模型已就绪: " + modelFile.getName());
         updateStatus("AI 模型已加载");
         useMockParser = false; // 关闭 Mock 模式
     }
