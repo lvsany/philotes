@@ -74,7 +74,7 @@
                     android:id="@+id/btn_close_card"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:background="@android:color/transparent"
                     android:src="@android:drawable/ic_menu_close_clear_cancel"
                     android:scaleType="centerInside"
                     android:contentDescription="Close" />

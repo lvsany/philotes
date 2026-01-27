@@ -58,12 +58,15 @@ public class FloatingButtonService extends Service {
     private int screenWidth;
     private int screenHeight;
     private int screenDensity;
+    private boolean isFloatingViewAdded = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        // startForeground moved to onStartCommand to ensure we have media projection permissions
+        // 注意：不要在 onCreate 中添加悬浮窗
+        // 必须等到 startForeground() 调用后才能添加
+        // 悬浮窗的初始化移到 initFloatingView() 方法中
 
         // 获取屏幕数据
         DisplayMetrics metrics = getResources().getDisplayMetrics();
@@ -72,8 +75,19 @@ public class FloatingButtonService extends Service {
         screenDensity = metrics.densityDpi;
 
         projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+    }
 
-        floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_button, null);
+    /**
+     * 初始化悬浮窗视图
+     * 必须在 startForeground() 之后调用
+     */
+    private void initFloatingView() {
+        if (isFloatingViewAdded) return;
+
+        // 使用带有主题的 Context 来 inflate 布局，避免主题属性无法解析
+        Context themedContext = new android.view.ContextThemeWrapper(this, R.style.Theme_Philotes);
+        floatingView = LayoutInflater.from(themedContext).inflate(R.layout.layout_floating_button, null);
 
         // 初始化 View 引用
         iconView = floatingView.findViewById(R.id.floating_button);
@@ -103,8 +117,13 @@ public class FloatingButtonService extends Service {
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = 0;
         params.y = 100;
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        windowManager.addView(floatingView, params);
+
+        try {
+            windowManager.addView(floatingView, params);
+            isFloatingViewAdded = true;
+        } catch (Exception e) {
+            Log.e("FloatingService", "Failed to add floating view", e);
+        }
 
         // 只有在 Icon 模式下才响应拖拽
         iconView.setOnTouchListener(new View.OnTouchListener() {
@@ -180,12 +199,16 @@ public class FloatingButtonService extends Service {
         }
 
         if (ACTION_INIT_PROJECTION.equals(intent.getAction())) {
-            int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1);
-            Intent data = intent.getParcelableExtra(EXTRA_DATA);
+            // 从 ScreenCaptureActivity 的静态变量获取授权结果
+            int resultCode = ScreenCaptureActivity.getResultCode();
+            Intent data = ScreenCaptureActivity.getResultData();
             
-            if (resultCode != -1 && data != null) {
+            Log.d("FloatingService", "onStartCommand: resultCode=" + resultCode + ", data=" + data);
+            
+            if (ScreenCaptureActivity.hasValidResult()) {
                 try {
                     // Start foreground service with MEDIA_PROJECTION type
+                    // 必须先调用 startForeground()，然后才能进行其他操作
                     if (Build.VERSION.SDK_INT >= 29) {
                         int type = 0;
                         if (Build.VERSION.SDK_INT >= 34) {
@@ -198,7 +221,21 @@ public class FloatingButtonService extends Service {
                         startForeground(1, createNotification());
                     }
 
+                    // 在 startForeground() 之后初始化悬浮窗
+                    initFloatingView();
+
                     mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                    
+                    // 清除静态变量，避免内存泄漏
+                    ScreenCaptureActivity.clearResult();
+                    
+                    if (mediaProjection == null) {
+                        Log.e("FloatingService", "Failed to get MediaProjection, data may be invalid");
+                        Toast.makeText(this, "获取截屏权限失败，请重试", Toast.LENGTH_SHORT).show();
+                        stopSelf();
+                        return START_NOT_STICKY;
+                    }
+                    
                     // 注册回调，监听 MediaProjection 停止，例如被系统收回
                     mediaProjection.registerCallback(new MediaProjection.Callback() {
                         @Override
@@ -216,10 +253,12 @@ public class FloatingButtonService extends Service {
                 } catch (Exception e) {
                     Log.e("FloatingService", "Failed to start service or get projection", e);
                     Toast.makeText(this, "启动服务失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    ScreenCaptureActivity.clearResult();
                     stopSelf();
                 }
             } else {
-                 stopSelf();
+                Log.e("FloatingService", "Invalid resultCode or data is null");
+                stopSelf();
             }
         }
         return START_NOT_STICKY;
@@ -390,7 +429,14 @@ public class FloatingButtonService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (floatingView != null) windowManager.removeView(floatingView);
+        if (floatingView != null && isFloatingViewAdded) {
+            try {
+                windowManager.removeView(floatingView);
+            } catch (Exception e) {
+                Log.e("FloatingService", "Failed to remove floating view", e);
+            }
+            isFloatingViewAdded = false;
+        }
         if (mediaProjection != null) {
             mediaProjection.stop();
             mediaProjection = null;
