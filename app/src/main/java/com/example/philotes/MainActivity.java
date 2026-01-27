@@ -147,10 +147,12 @@ public class MainActivity extends AppCompatActivity {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName()));
-                startActivity(intent);
+                overlayPermissionLauncher.launch(intent);
             } else {
-                startService(new Intent(this, FloatingButtonService.class));
-                Toast.makeText(this, "悬浮球已开启", Toast.LENGTH_SHORT).show();
+                // Android 14+ 要求启动 MediaProjection 类型的 FGS 前必须先获得用户授权
+                Toast.makeText(this, "请授予录屏权限以开启悬浮球", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(this, ScreenCaptureActivity.class);
+                startActivity(intent);
             }
         });
     }
@@ -183,8 +185,9 @@ public class MainActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (Settings.canDrawOverlays(this)) {
-                        Toast.makeText(this, "悬浮窗权限已授予", Toast.LENGTH_SHORT).show();
-                        startService(new Intent(this, FloatingButtonService.class));
+                        Toast.makeText(this, "悬浮窗权限已授予，请继续授权录屏", Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(this, ScreenCaptureActivity.class);
+                        startActivity(intent);
                     } else {
                         Toast.makeText(this, "悬浮窗权限被拒绝，功能可能受限", Toast.LENGTH_SHORT).show();
                     }

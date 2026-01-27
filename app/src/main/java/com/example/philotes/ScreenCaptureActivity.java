@@ -2,11 +2,13 @@ package com.example.philotes;
 
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 public class ScreenCaptureActivity extends AppCompatActivity {
 
@@ -34,7 +36,9 @@ public class ScreenCaptureActivity extends AppCompatActivity {
                 serviceIntent.setAction(FloatingButtonService.ACTION_INIT_PROJECTION);
                 serviceIntent.putExtra(FloatingButtonService.EXTRA_RESULT_CODE, resultCode);
                 serviceIntent.putExtra(FloatingButtonService.EXTRA_DATA, data);
-                startService(serviceIntent);
+
+                // 使用 startForegroundService 启动
+                ContextCompat.startForegroundService(this, serviceIntent);
 
                 finish();
             } else {

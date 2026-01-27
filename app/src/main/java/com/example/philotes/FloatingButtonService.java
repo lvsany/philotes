@@ -27,6 +27,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -45,6 +46,9 @@ public class FloatingButtonService extends Service {
 
     private WindowManager windowManager;
     private View floatingView;
+    private View iconView;
+    private View cardView;
+    private TextView tvCardContent;
     private WindowManager.LayoutParams params;
 
     private MediaProjectionManager projectionManager;
@@ -59,7 +63,7 @@ public class FloatingButtonService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForeground(1, createNotification());
+        // startForeground moved to onStartCommand to ensure we have media projection permissions
 
         // 获取屏幕数据
         DisplayMetrics metrics = getResources().getDisplayMetrics();
@@ -70,6 +74,20 @@ public class FloatingButtonService extends Service {
         projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
         floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_button, null);
+
+        // 初始化 View 引用
+        iconView = floatingView.findViewById(R.id.floating_button);
+        cardView = floatingView.findViewById(R.id.card_result);
+        tvCardContent = floatingView.findViewById(R.id.tv_card_content);
+        View btnClose = floatingView.findViewById(R.id.btn_close_card);
+        View btnAction = floatingView.findViewById(R.id.btn_action);
+
+        btnClose.setOnClickListener(v -> showIconMode());
+        btnAction.setOnClickListener(v -> {
+            Toast.makeText(this, "动作已执行 (Mock)", Toast.LENGTH_SHORT).show();
+            showIconMode();
+        });
+
         int layoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -87,8 +105,9 @@ public class FloatingButtonService extends Service {
         params.y = 100;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         windowManager.addView(floatingView, params);
-        ImageView closeButton = floatingView.findViewById(R.id.floating_button);
-        closeButton.setOnTouchListener(new View.OnTouchListener() {
+
+        // 只有在 Icon 模式下才响应拖拽
+        iconView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX;
             private int initialY;
             private float initialTouchX;
@@ -122,25 +141,85 @@ public class FloatingButtonService extends Service {
         });
     }
 
+    private void showIconMode() {
+        if (floatingView == null) return;
+        iconView.setVisibility(View.VISIBLE);
+        cardView.setVisibility(View.GONE);
+        // 使用之前记录的 params，或者只更新宽高
+        params.width = WindowManager.LayoutParams.WRAP_CONTENT;
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        // 注意：这里可能需要保留 x, y 位置，不要重置
+        windowManager.updateViewLayout(floatingView, params);
+    }
+
+    private void showCardMode(String content) {
+        if (floatingView == null) return;
+
+        // 更新内容
+        tvCardContent.setText(content);
+
+        // 切换显示
+        iconView.setVisibility(View.GONE);
+        cardView.setVisibility(View.VISIBLE);
+
+        // 调整 Window 大小以适应卡片
+        // params.width = WindowManager.LayoutParams.MATCH_PARENT; // 或者固定宽度
+        params.width = WindowManager.LayoutParams.WRAP_CONTENT;
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        windowManager.updateViewLayout(floatingView, params);
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_INIT_PROJECTION.equals(intent.getAction())) {
+        // 防止 intent 为空导致 crash
+        if (intent == null) {
+            // Service restarted by system without intent (START_STICKY), but we need the projection data.
+            // Cannot start foreground with mediaProjection type without permission.
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        if (ACTION_INIT_PROJECTION.equals(intent.getAction())) {
             int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1);
             Intent data = intent.getParcelableExtra(EXTRA_DATA);
+            
             if (resultCode != -1 && data != null) {
-                mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                // 注册回调，监听 MediaProjection 停止，例如被系统收回
-                mediaProjection.registerCallback(new MediaProjection.Callback() {
-                    @Override
-                    public void onStop() {
-                        super.onStop();
-                        mediaProjection = null;
-                        stopVirtualDisplay();
+                try {
+                    // Start foreground service with MEDIA_PROJECTION type
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        int type = 0;
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            type = 32; // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                        } else {
+                            type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
+                        }
+                        startForeground(1, createNotification(), type);
+                    } else {
+                        startForeground(1, createNotification());
                     }
-                }, null);
 
-                // 立即进行截图
-                performCapture();
+                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                    // 注册回调，监听 MediaProjection 停止，例如被系统收回
+                    mediaProjection.registerCallback(new MediaProjection.Callback() {
+                        @Override
+                        public void onStop() {
+                            super.onStop();
+                            mediaProjection = null;
+                            stopVirtualDisplay();
+                        }
+                    }, null);
+
+                    Toast.makeText(this, "悬浮截屏服务已启动，点击悬浮球截图", Toast.LENGTH_SHORT).show();
+                    // 不要立即截图，等待用户点击
+                    // performCapture();
+
+                } catch (Exception e) {
+                    Log.e("FloatingService", "Failed to start service or get projection", e);
+                    Toast.makeText(this, "启动服务失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    stopSelf();
+                }
+            } else {
+                 stopSelf();
             }
         }
         return START_NOT_STICKY;
@@ -178,7 +257,10 @@ public class FloatingButtonService extends Service {
             if (mediaProjection != null) {
                 performCapture();
             } else {
-                Toast.makeText(this, "正在请求截屏权限...", Toast.LENGTH_SHORT).show();
+                // 这里理论上不应该走到，因为启动服务时就已经强制要求了权限。
+                // 但如果 App 被杀后重启 Service（START_NOT_STICKY），mediaProjection 会丢失。
+                // 此时需要重新请求。
+                Toast.makeText(this, "需要重新获取截屏权限...", Toast.LENGTH_SHORT).show();
                 Intent intent = new Intent(this, ScreenCaptureActivity.class);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
@@ -232,7 +314,9 @@ public class FloatingButtonService extends Service {
                     finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
 
                     Log.d("FloatingService", "Screenshot saved: " + file.getAbsolutePath());
-                    openMainActivity(file);
+                    // 以前是 openMainActivity(file);
+                    // 现在改为处理并显示卡片
+                    processAndShowCard(file);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -265,14 +349,42 @@ public class FloatingButtonService extends Service {
         }
     }
 
-    private void openMainActivity(File imageFile) {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setAction(Intent.ACTION_SEND);
-        intent.setType("image/png");
-        intent.putExtra("image_path", imageFile.getAbsolutePath());
-        intent.putExtra(Intent.EXTRA_TEXT, "PROCESSED_BY_SERVICE"); // 标记位
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        startActivity(intent);
+    private void processAndShowCard(File imageFile) {
+        // 恢复悬浮窗显示（先恢复成 hidden 状态，然后 showCardMode 会处理 visibility）
+        // 注意：performCapture 的 finally 块里有一个恢复显示的逻辑，我们需要覆盖它或者利用它
+        // 这里我们可以先模拟后台处理
+
+        // 我们最好在 finally 块里只是简单的 "setVisibility(VISIBLE)"，
+        // 但是通过 postDelayed 来更新状态可能会跟 finally 里的冲突。
+        // 最好是修改 finally 里的逻辑，或者在这里控制。
+
+        // 实际上 finally 里的逻辑是：
+        // new Handler(Looper.getMainLooper()).post(() -> {
+        //    if (floatingView != null) floatingView.setVisibility(View.VISIBLE);
+        // });
+
+        // 所以我们可以在这里安排一个任务，在 finally 那个恢复之后执行
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+             // 模拟分析耗时
+            Toast.makeText(this, "正在分析截图...", Toast.LENGTH_SHORT).show();
+
+            new Thread(() -> {
+                try {
+                    Thread.sleep(1500); // 模拟耗时
+                    String mockResult = "识别结果：\n\n- 时间：明天下午三点\n- 事件：项目复盘会\n- 地点：会议室A";
+
+                    runOnUiThread(() -> {
+                        showCardMode(mockResult);
+                    });
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }, 200); // 稍微晚一点，覆盖 finally 的显示
+    }
+
+    private void runOnUiThread(Runnable runnable) {
+        new Handler(Looper.getMainLooper()).post(runnable);
     }
 
     @Override

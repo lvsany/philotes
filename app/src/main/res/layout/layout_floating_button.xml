@@ -1,16 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:padding="8dp">
+    android:layout_height="wrap_content">
 
+    <!-- 悬浮球图标 -->
     <ImageView
         android:id="@+id/floating_button"
         android:layout_width="56dp"
         android:layout_height="56dp"
-        android:background="@android:drawable/btn_default"
+        android:layout_margin="8dp"
+        android:background="@drawable/bg_circle_button"
+        android:backgroundTint="@android:color/holo_blue_light"
         android:src="@android:drawable/ic_menu_camera"
         android:padding="12dp"
         android:scaleType="centerInside"
-        android:elevation="8dp" />
+        android:elevation="8dp"
+        android:contentDescription="Snap Button" />
+
+    <!-- 结果卡片 (默认隐藏) -->
+    <!-- 注意：为了避免点击穿透和布局对其，卡片大小在代码中控制或设为 wrap_content -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_result"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp"
+        android:visibility="gone"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="10dp"
+        app:cardBackgroundColor="@android:color/white">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="智能解析结果"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/darker_gray" />
+
+            <TextView
+                android:id="@+id/tv_card_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="正在分析..."
+                android:textSize="16sp"
+                android:textColor="@android:color/black"
+                android:minLines="2" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="16dp"
+                android:gravity="end">
+
+                <Button
+                    android:id="@+id/btn_action"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="执行"
+                    android:textColor="@android:color/white"
+                    android:backgroundTint="@android:color/holo_blue_light"
+                    android:layout_marginEnd="8dp" />
+
+                <ImageButton
+                    android:id="@+id/btn_close_card"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    android:scaleType="centerInside"
+                    android:contentDescription="Close" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
 </FrameLayout>
