@@ -1,12 +1,15 @@
 package com.example.philotes;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
+import android.view.accessibility.AccessibilityManager;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -144,17 +147,35 @@ public class MainActivity extends AppCompatActivity {
         // FAB 开启悬浮球
         FloatingActionButton fab = findViewById(R.id.fabEnableFloating);
         fab.setOnClickListener(v -> {
-            if (!Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-                overlayPermissionLauncher.launch(intent);
+            if (!isAccessibilityServiceEnabled()) {
+                new AlertDialog.Builder(this)
+                        .setTitle("需要辅助功能权限")
+                        .setMessage("请在设置中开启“Philotes助手”辅助功能，以便使用悬浮截图功能。")
+                        .setPositiveButton("去开启", (dialog, which) -> {
+                            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                            startActivity(intent);
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
             } else {
-                // Android 14+ 要求启动 MediaProjection 类型的 FGS 前必须先获得用户授权
-                Toast.makeText(this, "请授予录屏权限以开启悬浮球", Toast.LENGTH_SHORT).show();
-                Intent intent = new Intent(this, ScreenCaptureActivity.class);
-                startActivity(intent);
+                Toast.makeText(this, "悬浮截屏服务已开启", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private boolean isAccessibilityServiceEnabled() {
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am == null) return false;
+
+        List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+        String serviceId = getPackageName() + "/" + FloatingButtonService.class.getName();
+
+        for (AccessibilityServiceInfo service : enabledServices) {
+            if (serviceId.equals(service.getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -184,12 +205,10 @@ public class MainActivity extends AppCompatActivity {
         overlayPermissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
+                    // Overlay permission check logic might be redundant if using Accessibility Service
+                    // keeping it for now in case other parts need it, but removing screen capture link
                     if (Settings.canDrawOverlays(this)) {
-                        Toast.makeText(this, "悬浮窗权限已授予，请继续授权录屏", Toast.LENGTH_SHORT).show();
-                        Intent intent = new Intent(this, ScreenCaptureActivity.class);
-                        startActivity(intent);
-                    } else {
-                        Toast.makeText(this, "悬浮窗权限被拒绝，功能可能受限", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "悬浮窗权限已授予", Toast.LENGTH_SHORT).show();
                     }
                 }
         );

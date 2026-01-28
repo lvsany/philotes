@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Philotes</string>
+    <string name="accessibility_service_description">Philotes需要此权限来截取屏幕内容以进行分析。</string>
 </resources>

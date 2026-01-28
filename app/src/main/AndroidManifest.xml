@@ -49,15 +49,6 @@
         <activity android:name=".ActionDetailActivity"
             android:label="动作详情"
             android:theme="@style/Theme.Philotes" />
-
-        <activity android:name=".ScreenCaptureActivity"
-            android:theme="@style/Theme.Philotes.Translucent"
-            android:exported="false" />
-
-        <service android:name=".FloatingButtonService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection"/>
     </application>
 
 </manifest>
