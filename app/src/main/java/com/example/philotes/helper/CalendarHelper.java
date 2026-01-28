@@ -3,6 +3,7 @@ package com.example.philotes.helper;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.provider.CalendarContract;
 import android.util.Log;
@@ -43,54 +44,59 @@ public class CalendarHelper {
         String location = slots.getOrDefault("location", "");
         String content = slots.getOrDefault("content", "");
 
+        // 解析时间
+        Calendar startTime = parseTime(timeStr);
+        if (startTime == null) {
+            // 如果没有时间，使用当前时间+1小时
+            startTime = Calendar.getInstance();
+            startTime.add(Calendar.HOUR_OF_DAY, 1);
+        }
+
+        // 结束时间默认为开始时间+1小时
+        Calendar endTime = (Calendar) startTime.clone();
+        endTime.add(Calendar.HOUR_OF_DAY, 1);
+
+        // 统一使用 Intent 方式创建日历事件（更可靠）
+        return createCalendarEventViaIntent(context, title, location, content,
+                startTime.getTimeInMillis(), endTime.getTimeInMillis());
+    }
+
+    /**
+     * 使用 Intent 方式创建日历事件（调起系统日历UI）
+     * 这种方式不需要设备登录日历账户
+     * 返回特殊 URI "philotes://calendar/intent" 表示是通过 Intent 方式打开
+     */
+    private static Uri createCalendarEventViaIntent(Context context, String title,
+            String location, String description, long startTimeMillis, long endTimeMillis) {
         try {
-            // 获取日历ID（使用第一个可用的日历）
-            long calendarId = getFirstCalendarId(context);
-            if (calendarId == -1) {
-                Log.e(TAG, "没有找到可用的日历账户");
-                return null;
+            Intent intent = new Intent(Intent.ACTION_INSERT);
+            intent.setData(CalendarContract.Events.CONTENT_URI);
+            intent.putExtra(CalendarContract.Events.TITLE, title);
+            intent.putExtra(CalendarContract.Events.EVENT_LOCATION, location);
+            intent.putExtra(CalendarContract.Events.DESCRIPTION, description);
+            intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTimeMillis);
+            intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endTimeMillis);
+
+            // 检查是否有应用可以处理此 Intent
+            if (intent.resolveActivity(context.getPackageManager()) != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+                Log.d(TAG, "已打开系统日历创建事件");
+                // 返回特殊标记 URI，表示这是 Intent 方式
+                return Uri.parse("philotes://calendar/intent");
+            } else {
+                // 没有日历应用，尝试使用 chooser
+                Intent chooser = Intent.createChooser(intent, "选择日历应用创建事件");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(chooser);
+                Log.d(TAG, "使用 Chooser 打开日历");
+                return Uri.parse("philotes://calendar/intent");
             }
-
-            // 解析时间
-            Calendar startTime = parseTime(timeStr);
-            if (startTime == null) {
-                // 如果没有时间，使用当前时间+1小时
-                startTime = Calendar.getInstance();
-                startTime.add(Calendar.HOUR_OF_DAY, 1);
-            }
-
-            // 结束时间默认为开始时间+1小时
-            Calendar endTime = (Calendar) startTime.clone();
-            endTime.add(Calendar.HOUR_OF_DAY, 1);
-
-            // 创建事件内容
-            ContentValues values = new ContentValues();
-            values.put(CalendarContract.Events.CALENDAR_ID, calendarId);
-            values.put(CalendarContract.Events.TITLE, title);
-            values.put(CalendarContract.Events.DESCRIPTION, content);
-            values.put(CalendarContract.Events.EVENT_LOCATION, location);
-            values.put(CalendarContract.Events.DTSTART, startTime.getTimeInMillis());
-            values.put(CalendarContract.Events.DTEND, endTime.getTimeInMillis());
-            values.put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
-
-            // 添加提醒（提前15分钟）
-            values.put(CalendarContract.Events.HAS_ALARM, 1);
-
-            // 插入事件
-            ContentResolver cr = context.getContentResolver();
-            Uri eventUri = cr.insert(CalendarContract.Events.CONTENT_URI, values);
-
-            if (eventUri != null) {
-                // 添加提醒
-                long eventId = Long.parseLong(eventUri.getLastPathSegment());
-                addReminder(context, eventId, 15); // 15分钟提前提醒
-                Log.d(TAG, "日历事件创建成功: " + eventUri);
-            }
-
-            return eventUri;
-
+        } catch (android.content.ActivityNotFoundException e) {
+            Log.e(TAG, "设备上没有安装日历应用", e);
+            return null;
         } catch (Exception e) {
-            Log.e(TAG, "创建日历事件失败", e);
+            Log.e(TAG, "无法打开系统日历", e);
             return null;
         }
     }

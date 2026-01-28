@@ -82,9 +82,20 @@ public class ActionExecutor {
             android.net.Uri eventUri = CalendarHelper.createCalendarEvent(context, plan);
             if (eventUri != null) {
                 String title = plan.getSlots().getOrDefault("title", "事件");
-                return new ExecutionResult(true, "日历事件创建成功: " + title, eventUri);
+
+                // 检查是通过 Intent 打开还是直接创建
+                if (eventUri.toString().startsWith("philotes://calendar/intent")) {
+                    // Intent 方式 - 需要用户在日历应用中确认
+                    return new ExecutionResult(true,
+                            "已打开日历应用，请在日历中确认创建: " + title, eventUri);
+                } else {
+                    // 直接创建成功
+                    return new ExecutionResult(true,
+                            "日历事件创建成功: " + title, eventUri);
+                }
             } else {
-                return new ExecutionResult(false, "日历事件创建失败，请确保设备已登录日历账户");
+                return new ExecutionResult(false,
+                        "无法创建日历事件，请确保设备安装了日历应用");
             }
         } catch (Exception e) {
             return new ExecutionResult(false, "创建日历事件时出错: " + e.getMessage());
