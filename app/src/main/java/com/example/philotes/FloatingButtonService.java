@@ -5,7 +5,9 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
@@ -24,6 +26,12 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 
+import com.example.philotes.data.model.ActionPlan;
+import com.example.philotes.data.model.OcrResult;
+import com.example.philotes.domain.ActionParser;
+import com.example.philotes.domain.ActionExecutor;
+import com.example.philotes.utils.MlKitOcrService;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -40,6 +48,10 @@ public class FloatingButtonService extends AccessibilityService {
     private WindowManager.LayoutParams params;
 
     private boolean isFloatingViewAdded = false;
+
+    // AI组件
+    private ActionParser actionParser;
+    private ActionExecutor actionExecutor;
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -58,6 +70,9 @@ public class FloatingButtonService extends AccessibilityService {
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
+        // 初始化AI组件
+        initAiComponents();
+
         createNotificationChannel();
         // 启动前台服务以保持存活
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -70,6 +85,37 @@ public class FloatingButtonService extends AccessibilityService {
         initFloatingView();
 
         Toast.makeText(this, "悬浮截屏服务已启动", Toast.LENGTH_SHORT).show();
+    }
+
+    private void initAiComponents() {
+        try {
+            // 加载用户设置
+            com.example.philotes.utils.AiSettingsManager settingsManager =
+                new com.example.philotes.utils.AiSettingsManager(this);
+            settingsManager.applyToLlmConfig();
+
+            // 初始化ActionExecutor
+            actionExecutor = new ActionExecutor(this);
+
+            // 初始化ActionParser - 尝试使用云端API或端侧模型
+            if (settingsManager.isCloudApiMode() && settingsManager.isApiConfigured()) {
+                // 使用云端API
+                String apiKey = com.example.philotes.utils.LlmConfig.getOpenAiApiKey();
+                String baseUrl = com.example.philotes.utils.LlmConfig.getOpenAiBaseUrl();
+                String model = com.example.philotes.utils.LlmConfig.getOpenAiModel();
+
+                com.example.philotes.data.api.OpenAIService openAiService =
+                    new com.example.philotes.data.api.OpenAIService(apiKey, baseUrl, model);
+                actionParser = new ActionParser(openAiService);
+
+                Log.i(TAG, "AI initialized with Cloud API: " + model);
+            } else {
+                Log.w(TAG, "AI not initialized - need API configuration");
+                // 可以选择初始化端侧模型，但需要模型文件
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize AI components", e);
+        }
     }
 
     private void initFloatingView() {
@@ -275,25 +321,217 @@ public class FloatingButtonService extends AccessibilityService {
     private void processAndShowCard(File imageFile) {
         // 使用实际的 AI 接口分析图片
         new Handler(Looper.getMainLooper()).post(() -> {
-            showCardMode("正在深度分析屏幕内容...");
+            showCardMode("正在识别屏幕文字...");
 
             new Thread(() -> {
                 try {
-                    // TODO: 集成实际的 OCR 和 AI 分析服务
-                    // 1. 对图片进行 OCR 识别
-                    // 2. 使用 AI 模型解析文本内容
-                    // 3. 生成 ActionPlan
+                    // 1. 加载图片
+                    final Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+                    if (bitmap == null) {
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            showCardMode("图片加载失败"));
+                        return;
+                    }
 
-                    Thread.sleep(2000); // AI 处理耗时
+                    // 2. 创建可变的Bitmap副本，确保ML Kit可以安全访问
+                    final Bitmap mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                    bitmap.recycle(); // 立即释放原始bitmap
 
-                    // 暂时显示处理中的状态
-                    String result = "图片分析功能正在开发中\n请使用主界面的文本输入功能";
+                    if (mutableBitmap == null) {
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            showCardMode("图片处理失败"));
+                        return;
+                    }
 
-                    new Handler(Looper.getMainLooper()).post(() -> showCardMode(result));
-                } catch (InterruptedException e) {
-                    Log.e(TAG, "Analysis interrupted", e);
+                    // 3. 使用ML Kit进行OCR识别
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        MlKitOcrService.recognizeTextAsync(mutableBitmap,
+                            new MlKitOcrService.OcrCallback() {
+                                @Override
+                                public void onSuccess(OcrResult result) {
+                                    // OCR完成后释放bitmap
+                                    mutableBitmap.recycle();
+
+                                    if (result.getTextBlocks().isEmpty()) {
+                                        showCardMode("未识别到文字\n请确保截图中包含清晰的文本内容");
+                                        return;
+                                    }
+
+                                    // OCR成功，继续AI解析
+                                    String ocrText = result.toStructuredText();
+                                    showCardMode("✅ 识别成功\n\n正在AI分析...");
+
+                                    // 4. 自动进行AI解析
+                                    performAiAnalysis(ocrText, result);
+                                }
+
+                                @Override
+                                public void onError(Exception e) {
+                                    // 发生错误时也要释放bitmap
+                                    mutableBitmap.recycle();
+
+                                    Log.e(TAG, "OCR error", e);
+                                    showCardMode("OCR识别失败\n" + e.getMessage() +
+                                        "\n\n可能原因：\n" +
+                                        "1. 图片中没有清晰的文字\n" +
+                                        "2. 首次使用需联网下载模型");
+                                }
+                            });
+                    });
+
+                } catch (Exception e) {
+                    Log.e(TAG, "Analysis error", e);
+                    new Handler(Looper.getMainLooper()).post(() ->
+                        showCardMode("分析失败: " + e.getMessage()));
                 }
             }).start();
+        });
+    }
+
+    private void performAiAnalysis(String ocrText, OcrResult ocrResult) {
+        if (actionParser == null) {
+            // AI未初始化，显示文本并提供手动选项
+            String plainText = ocrResult.getPlainText();
+            showCardMode("✅ 识别成功\n\n" + plainText +
+                "\n\n⚠️ AI未配置\n点击「查看」跳转主界面手动解析");
+
+            // 设置按钮点击跳转
+            setupCardActionButton(() -> {
+                Intent intent = new Intent(FloatingButtonService.this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.setAction(Intent.ACTION_SEND);
+                intent.putExtra(Intent.EXTRA_TEXT, ocrText);
+                startActivity(intent);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> showIconMode(), 500);
+            });
+            return;
+        }
+
+        // 在后台线程执行AI解析
+        new Thread(() -> {
+            try {
+                ActionPlan actionPlan = actionParser.parse(ocrText);
+
+                if (actionPlan == null || actionPlan.getType() == com.example.philotes.data.model.ActionType.UNKNOWN) {
+                    // AI解析失败
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        String plainText = ocrResult.getPlainText();
+                        showCardMode("✅ 识别成功\n\n" + plainText +
+                            "\n\n⚠️ AI无法理解内容\n点击「查看」跳转主界面");
+
+                        setupCardActionButton(() -> {
+                            Intent intent = new Intent(FloatingButtonService.this, MainActivity.class);
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            intent.setAction(Intent.ACTION_SEND);
+                            intent.putExtra(Intent.EXTRA_TEXT, ocrText);
+                            startActivity(intent);
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> showIconMode(), 500);
+                        });
+                    });
+                    return;
+                }
+
+                // AI解析成功，显示ActionPlan
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    displayActionPlan(actionPlan);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "AI analysis error", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    showCardMode("AI分析失败\n" + e.getMessage());
+                });
+            }
+        }).start();
+    }
+
+    private void displayActionPlan(ActionPlan plan) {
+        StringBuilder displayText = new StringBuilder();
+        displayText.append("🎯 AI分析结果\n\n");
+
+        // 显示动作类型
+        switch (plan.getType()) {
+            case CREATE_CALENDAR:
+                displayText.append("📅 创建日历事件\n\n");
+                if (plan.getSlots().containsKey("title")) {
+                    displayText.append("标题：").append(plan.getSlots().get("title")).append("\n");
+                }
+                if (plan.getSlots().containsKey("time")) {
+                    displayText.append("时间：").append(plan.getSlots().get("time")).append("\n");
+                }
+                if (plan.getSlots().containsKey("location")) {
+                    displayText.append("地点：").append(plan.getSlots().get("location")).append("\n");
+                }
+                break;
+
+            case NAVIGATE:
+                displayText.append("🗺️ 导航到目的地\n\n");
+                if (plan.getSlots().containsKey("location")) {
+                    displayText.append("目的地：").append(plan.getSlots().get("location")).append("\n");
+                }
+                break;
+
+            case ADD_TODO:
+                displayText.append("✅ 添加待办事项\n\n");
+                if (plan.getSlots().containsKey("title")) {
+                    displayText.append("内容：").append(plan.getSlots().get("title")).append("\n");
+                }
+                break;
+
+            case COPY_TEXT:
+                displayText.append("📋 复制文本\n\n");
+                if (plan.getSlots().containsKey("content")) {
+                    displayText.append("内容：").append(plan.getSlots().get("content")).append("\n");
+                }
+                break;
+
+            default:
+                displayText.append("❓ 未知动作\n");
+                break;
+        }
+
+        displayText.append("\n点击「执行」立即执行此动作");
+        showCardMode(displayText.toString());
+
+        // 设置执行按钮
+        setupCardActionButton(() -> {
+            executeActionPlan(plan);
+        });
+    }
+
+    private void executeActionPlan(ActionPlan plan) {
+        showCardMode("正在执行...");
+
+        new Thread(() -> {
+            ActionExecutor.ExecutionResult result = actionExecutor.execute(plan);
+
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (result.success) {
+                    showCardMode("✅ 执行成功！\n\n" + result.message);
+                    Toast.makeText(FloatingButtonService.this, result.message, Toast.LENGTH_LONG).show();
+
+                    // 3秒后自动隐藏
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        showIconMode();
+                    }, 3000);
+                } else {
+                    showCardMode("❌ 执行失败\n\n" + result.message);
+
+                    // 5秒后自动隐藏
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        showIconMode();
+                    }, 5000);
+                }
+            });
+        }).start();
+    }
+
+    private void setupCardActionButton(Runnable action) {
+        View btnAction = cardView.findViewById(R.id.btn_action);
+        btnAction.setOnClickListener(v -> {
+            if (action != null) {
+                action.run();
+            }
         });
     }
 

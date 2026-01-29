@@ -44,4 +44,5 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.okhttp)
     implementation(libs.mediapipe.genai)
+    implementation("com.google.mlkit:text-recognition:16.0.0")
 }

@@ -4,6 +4,8 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -30,6 +32,7 @@ import com.example.philotes.data.model.ActionPlan;
 import com.example.philotes.domain.ActionParser;
 import com.example.philotes.domain.ActionExecutor;
 import com.example.philotes.utils.ModelUtils;
+import com.example.philotes.utils.MlKitOcrService;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
@@ -422,23 +425,81 @@ public class MainActivity extends AppCompatActivity {
 
             updateStatus("正在进行 OCR 识别...");
 
-            // TODO: 集成实际的 OCR 服务
-            // 1. 使用 OCR 库（如 ML Kit Text Recognition）识别图片中的文本
-            // 2. 将识别结果填充到输入框
-            // 3. 调用 performParse 进行解析
-
-            new Thread(() -> {
-                try {
-                    Thread.sleep(1500); // OCR 处理耗时
-
-                    runOnUiThread(() -> {
-                        updateStatus("OCR 功能正在开发中\n请手动输入文本");
-                        Toast.makeText(this, "OCR 功能开发中，请手动输入文本", Toast.LENGTH_LONG).show();
-                    });
-                } catch (InterruptedException e) {
-                    Log.e("MainActivity", "OCR thread interrupted", e);
+            // 使用 ML Kit OCR 识别图片文本
+            try {
+                Bitmap originalBitmap;
+                if (imagePath != null) {
+                    originalBitmap = BitmapFactory.decodeFile(imagePath);
+                } else {
+                    java.io.InputStream inputStream = getContentResolver().openInputStream(imageUri);
+                    originalBitmap = BitmapFactory.decodeStream(inputStream);
+                    if (inputStream != null) inputStream.close();
                 }
-            }).start();
+
+                if (originalBitmap != null) {
+                    // 创建可变的Bitmap副本，确保ML Kit可以安全访问
+                    final Bitmap mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                    originalBitmap.recycle(); // 立即释放原始bitmap
+
+                    if (mutableBitmap == null) {
+                        updateStatus("图片处理失败");
+                        Toast.makeText(this, "图片处理失败", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    MlKitOcrService.recognizeTextAsync(mutableBitmap, new MlKitOcrService.OcrCallback() {
+                        @Override
+                        public void onSuccess(com.example.philotes.data.model.OcrResult result) {
+                            // OCR完成后释放bitmap
+                            mutableBitmap.recycle();
+
+                            runOnUiThread(() -> {
+                                if (result.getTextBlocks().isEmpty()) {
+                                    updateStatus("❌ 未识别到文字\n请确保图片中包含清晰的文本");
+                                    Toast.makeText(MainActivity.this,
+                                        "未识别到文字", Toast.LENGTH_LONG).show();
+                                } else {
+                                    // 将结构化文本填充到输入框
+                                    String structuredText = result.toStructuredText();
+                                    etInput.setText(structuredText);
+                                    updateStatus("✅ OCR识别成功\n识别到 " +
+                                        result.getTextBlocks().size() + " 个文本块\n\n" +
+                                        "可以编辑后点击「AI解析」按钮");
+
+                                    Toast.makeText(MainActivity.this,
+                                        "识别成功！可编辑后解析", Toast.LENGTH_SHORT).show();
+
+                                    // 自动解析（可选，也可以让用户手动点击）
+                                    // performParse(structuredText);
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            // 发生错误时也要释放bitmap
+                            mutableBitmap.recycle();
+
+                            Log.e("MainActivity", "OCR error", e);
+                            runOnUiThread(() -> {
+                                updateStatus("❌ OCR识别失败\n" + e.getMessage() +
+                                    "\n\n可能原因：\n" +
+                                    "1. 图片中没有清晰的文字\n" +
+                                    "2. 首次使用需联网下载模型");
+                                Toast.makeText(MainActivity.this,
+                                    "OCR识别失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            });
+                        }
+                    });
+                } else {
+                    updateStatus("图片加载失败");
+                    Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e("MainActivity", "Image processing error", e);
+                updateStatus("图片处理失败: " + e.getMessage());
+                Toast.makeText(this, "图片处理失败", Toast.LENGTH_LONG).show();
+            }
         }
     }
 
