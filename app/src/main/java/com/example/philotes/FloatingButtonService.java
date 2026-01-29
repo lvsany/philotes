@@ -64,7 +64,12 @@ public class FloatingButtonService extends AccessibilityService {
 
         createNotificationChannel();
         // 启动前台服务以保持存活
-        startForeground(1, createNotification());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, createNotification(),
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(1, createNotification());
+        }
 
         initFloatingView();
 
