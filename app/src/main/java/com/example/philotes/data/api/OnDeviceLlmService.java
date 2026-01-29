@@ -1,6 +1,7 @@
 package com.example.philotes.data.api;
 
 import android.content.Context;
+import android.util.Log;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference;
 import java.io.File;
 
@@ -10,9 +11,12 @@ import java.io.File;
  * Requires a downloaded model file (e.g. gemma-2b-it-gpu-int4.bin).
  */
 public class OnDeviceLlmService implements ILlmService {
+    private static final String TAG = "OnDeviceLlmService";
     private final Context context;
     private final String modelPath;
     private LlmInference llmInference;
+    private boolean initializationFailed = false;
+    private String failureReason = "";
 
     // Provide a default path like "/data/local/tmp/gemma-2b.bin" or copy from assets.
     public OnDeviceLlmService(Context context, String modelPath) {
@@ -22,13 +26,14 @@ public class OnDeviceLlmService implements ILlmService {
 
     public void initialize() {
         if (llmInference != null) return;
+        if (initializationFailed) return; // Don't retry if already failed
 
         File modelFile = new File(modelPath);
         if (!modelFile.exists()) {
-            // NOTE: This usually catches the case where the file hasn't been pushed or copied yet.
-            // MainActivity displays a warning, but if we try to run anyway:
-            throw new RuntimeException("Model file MISSING at path: " + modelPath +
-                "\nSee app screen for instructions.");
+            initializationFailed = true;
+            failureReason = "Model file not found at: " + modelPath;
+            Log.e(TAG, failureReason);
+            throw new RuntimeException(failureReason + "\nPlease download the model first.");
         }
 
         LlmInference.LlmInferenceOptions options = LlmInference.LlmInferenceOptions.builder()
@@ -39,19 +44,32 @@ public class OnDeviceLlmService implements ILlmService {
 
         try {
             llmInference = LlmInference.createFromOptions(context, options);
+            Log.i(TAG, "LLM initialized successfully");
         } catch (Throwable t) {
-            String msg = "Failed to initialize On-Device LLM. \n" +
+            initializationFailed = true;
+            failureReason = t.getMessage();
+            String msg = "Failed to initialize On-Device LLM.\n" +
                          "If you are running on an Emulator, this is expected (MediaPipe GenAI supports ARM64 devices only).\n" +
-                         "Error: " + t.getMessage();
-            System.err.println(msg);
-            throw new RuntimeException(msg, t);
+                         "Error: " + failureReason;
+            Log.e(TAG, msg, t);
+            // Don't throw - allow app to continue without LLM
         }
     }
 
     @Override
     public String chatCompletion(String systemPrompt, String userMessage) {
+        if (initializationFailed) {
+            Log.e(TAG, "Cannot complete chat - initialization failed: " + failureReason);
+            return null;
+        }
+
         if (llmInference == null) {
-            initialize();
+            try {
+                initialize();
+            } catch (Exception e) {
+                Log.e(TAG, "Initialization failed during chat completion", e);
+                return null;
+            }
             if (llmInference == null) {
                 return null; // Initialization failed
             }
@@ -68,14 +86,14 @@ public class OnDeviceLlmService implements ILlmService {
                             "Input text:\n" + userMessage + "<end_of_turn>\n" +
                             "<start_of_turn>model\n";
 
-        System.out.println("LLM Input: " + fullPrompt);
+        Log.d(TAG, "LLM Input: " + fullPrompt);
 
         try {
             String result = llmInference.generateResponse(fullPrompt);
-            System.out.println("LLM Output: " + result);
+            Log.d(TAG, "LLM Output: " + result);
             return result;
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error generating LLM response", e);
             return null;
         }
     }
@@ -84,5 +102,17 @@ public class OnDeviceLlmService implements ILlmService {
         // LlmInference doesn't have a close method exposed directly in all versions,
         // but it's good practice to clear references.
         llmInference = null;
+    }
+
+    public boolean isInitialized() {
+        return llmInference != null;
+    }
+
+    public boolean hasInitializationFailed() {
+        return initializationFailed;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
     }
 }

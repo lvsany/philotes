@@ -67,7 +67,29 @@ public class OpenAIService implements ILlmService {
 
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                System.out.println("API Error: " + response.code() + " " + response.message());
+                String errorMsg = "API Error: " + response.code() + " " + response.message();
+
+                // 详细的错误信息
+                if (response.code() == 401) {
+                    errorMsg += "\n❌ API Key 无效或未配置！请检查设置。";
+                } else if (response.code() == 429) {
+                    errorMsg += "\n⚠️ API 调用超出限制，请稍后再试。";
+                } else if (response.code() == 500) {
+                    errorMsg += "\n⚠️ API 服务器错误，请稍后再试。";
+                }
+
+                System.err.println(errorMsg);
+
+                // 尝试读取错误详情
+                if (response.body() != null) {
+                    try {
+                        String errorBody = response.body().string();
+                        System.err.println("Error details: " + errorBody);
+                    } catch (Exception e) {
+                        // 忽略
+                    }
+                }
+
                 return null;
             }
 
@@ -83,6 +105,7 @@ public class OpenAIService implements ILlmService {
                 }
             }
         } catch (IOException e) {
+            System.err.println("Network error: " + e.getMessage());
             e.printStackTrace();
         }
         return null;

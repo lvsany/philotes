@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
 import android.view.accessibility.AccessibilityManager;
 import android.accessibilityservice.AccessibilityServiceInfo;
@@ -28,7 +29,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.philotes.data.model.ActionPlan;
 import com.example.philotes.domain.ActionParser;
 import com.example.philotes.domain.ActionExecutor;
-import com.example.philotes.domain.MockActionParser;
 import com.example.philotes.utils.ModelUtils;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -62,9 +62,6 @@ public class MainActivity extends AppCompatActivity {
     // 核心组件
     private ActionParser actionParser;
     private ActionExecutor actionExecutor;
-    
-    // Mock 模式开关（模型不可用时使用）
-    private boolean useMockParser = true; // 默认使用 Mock 模式
 
     // 权限请求启动器
     private ActivityResultLauncher<String[]> requestPermissionLauncher;
@@ -75,6 +72,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // ========== 加载用户设置 ==========
+        com.example.philotes.utils.AiSettingsManager settingsManager =
+            new com.example.philotes.utils.AiSettingsManager(this);
+        settingsManager.applyToLlmConfig();
+        // ==================================
 
         // 初始化执行器
         actionExecutor = new ActionExecutor(this);
@@ -98,11 +101,9 @@ public class MainActivity extends AppCompatActivity {
         File modelFile = ModelUtils.getModelFile(this);
         if (modelFile.exists()) {
             initModel(modelFile);
-            useMockParser = false; // 模型可用，关闭 Mock 模式
         } else {
             showDownloadUI();
-            useMockParser = true; // 模型不可用，使用 Mock 模式
-            Toast.makeText(this, "模型未下载，使用规则解析模式", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "模型未下载，请先下载模型", Toast.LENGTH_LONG).show();
         }
 
         // 显示提示
@@ -119,6 +120,12 @@ public class MainActivity extends AppCompatActivity {
         // LLM 相关视图
         etInput = findViewById(R.id.etInput);
         btnParse = findViewById(R.id.btnParse);
+
+        // 设置按钮
+        findViewById(R.id.btnSettings).setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
+        });
 
         // 卡片列表
         rvActionCards = findViewById(R.id.rvActionCards);
@@ -254,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
      * 显示提示信息
      */
     private void showSimulatedRecognitionResult() {
-        String result = "请输入文本并点击解析按钮\n\nMock 测试模式：\n输入 1 = 创建日历事件\n输入 2 = 开始导航\n输入 3 = 添加待办";
+        String result = "请输入文本并点击解析按钮";
         statusText.setText(result);
     }
 
@@ -262,31 +269,44 @@ public class MainActivity extends AppCompatActivity {
      * 解析文本并执行动作
      */
     private void performParse(String text) {
+        if (actionParser == null) {
+            Toast.makeText(this, "模型未加载，请先下载并初始化模型", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         statusText.setText("正在解析...");
 
-        // 模拟解析逻辑，增加到列表
+        // 使用 AI 模型解析
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // 假装在思考
-                ActionPlan plan;
-                if (useMockParser) {
-                    plan = MockActionParser.parse(text);
-                } else {
-                    plan = actionParser.parse(text);
-                }
+                Thread.sleep(1000); // AI 处理耗时
+                ActionPlan plan = actionParser.parse(text);
 
                 if (plan != null) {
                     runOnUiThread(() -> {
-                        actionPlanList.add(0, plan);
-                        actionCardAdapter.notifyItemInserted(0);
-                        rvActionCards.scrollToPosition(0);
-                        statusText.setText("解析成功");
+                        // 检查是否是 UNKNOWN 类型
+                        if (plan.getType() == com.example.philotes.data.model.ActionType.UNKNOWN) {
+                            statusText.setText("⚠️ 解析失败\n\n可能原因：\n• API Key 无效（401 错误）\n• 网络连接问题\n• API 配置错误\n\n请检查设置页面的 API 配置");
+                            Toast.makeText(this, "解析失败：请检查 API 设置", Toast.LENGTH_LONG).show();
+                        } else {
+                            actionPlanList.add(0, plan);
+                            actionCardAdapter.notifyItemInserted(0);
+                            rvActionCards.scrollToPosition(0);
+                            statusText.setText("解析成功");
+                        }
                     });
                 } else {
-                    runOnUiThread(() -> statusText.setText("未能识别出动作"));
+                    runOnUiThread(() -> {
+                        statusText.setText("未能识别出动作");
+                        Toast.makeText(this, "解析失败", Toast.LENGTH_SHORT).show();
+                    });
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> statusText.setText("解析失败: " + e.getMessage()));
+                runOnUiThread(() -> {
+                    String errorMsg = "解析失败: " + e.getMessage();
+                    statusText.setText(errorMsg);
+                    Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show();
+                });
             }
         }).start();
     }
@@ -402,21 +422,21 @@ public class MainActivity extends AppCompatActivity {
 
             updateStatus("正在进行 OCR 识别...");
 
-            // 模拟 OCR 过程
+            // TODO: 集成实际的 OCR 服务
+            // 1. 使用 OCR 库（如 ML Kit Text Recognition）识别图片中的文本
+            // 2. 将识别结果填充到输入框
+            // 3. 调用 performParse 进行解析
+
             new Thread(() -> {
                 try {
-                    Thread.sleep(1500); // 模拟网络耗时
-
-                    // 假设 OCR 返回了如下文本
-                    String simulatedOcrText = "明天下午三点在会议室开会讨论项目进度";
+                    Thread.sleep(1500); // OCR 处理耗时
 
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "OCR 识别完成", Toast.LENGTH_SHORT).show();
-                        etInput.setText(simulatedOcrText); // 填充到输入框供用户修改
-                        performParse(simulatedOcrText); // 自动开始解析
+                        updateStatus("OCR 功能正在开发中\n请手动输入文本");
+                        Toast.makeText(this, "OCR 功能开发中，请手动输入文本", Toast.LENGTH_LONG).show();
                     });
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Log.e("MainActivity", "OCR thread interrupted", e);
                 }
             }).start();
         }
@@ -426,9 +446,23 @@ public class MainActivity extends AppCompatActivity {
 
     private void showDownloadUI() {
         layoutDownload.setVisibility(View.VISIBLE);
-        btnParse.setEnabled(true); // Mock 模式下仍可解析
-        etInput.setEnabled(true);
-        statusText.setText("使用规则解析模式（Mock）\n下载模型后可启用 AI 解析");
+
+        // 检查是否配置了 OpenAI API
+        if (com.example.philotes.utils.LlmConfig.isOpenAiConfigured()) {
+            // 有 API 配置，可以直接使用
+            initOpenAiService();
+        } else {
+            // 没有 API 配置
+            btnParse.setEnabled(false);
+            btnParse.setText("需下载模型或配置 API");
+            etInput.setEnabled(true);
+            etInput.setHint("下载模型或配置 OpenAI API");
+
+            statusText.setText("⚠️ 模型未下载\n\n" +
+                              "选项 1: 下载端侧模型（需真机）\n" +
+                              "选项 2: 配置 OpenAI API（可用模拟器）\n\n" +
+                              "您仍可以测试 UI 和其他功能");
+        }
     }
 
     private void startDownload(File targetFile) {
@@ -464,13 +498,110 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initModel(File modelFile) {
-        // 初始化 ActionParser
-        actionParser = new ActionParser(new com.example.philotes.data.api.OnDeviceLlmService(this, modelFile.getAbsolutePath()));
+        // 获取用户设置
+        com.example.philotes.utils.AiSettingsManager settingsManager =
+            new com.example.philotes.utils.AiSettingsManager(this);
 
-        btnParse.setEnabled(true);
-        etInput.setEnabled(true);
-        statusText.setText("模型已就绪: " + modelFile.getName());
-        updateStatus("AI 模型已加载");
-        useMockParser = false; // 关闭 Mock 模式
+        // 用户设置优先：如果用户选择云端模式且已配置
+        if (settingsManager.isCloudApiMode() && settingsManager.isApiConfigured()) {
+            initOpenAiService();
+            return;
+        }
+
+        // 检查是否在模拟器上运行
+        boolean isEmulator = com.example.philotes.utils.LlmConfig.isEmulator();
+
+        // 模拟器且配置了 OpenAI API - 使用 OpenAI
+        if (isEmulator && com.example.philotes.utils.LlmConfig.isOpenAiConfigured()) {
+            initOpenAiService();
+            return;
+        }
+
+        // 尝试初始化端侧 LLM
+        try {
+            com.example.philotes.data.api.OnDeviceLlmService llmService =
+                new com.example.philotes.data.api.OnDeviceLlmService(this, modelFile.getAbsolutePath());
+
+            // 尝试初始化
+            llmService.initialize();
+
+            if (llmService.hasInitializationFailed()) {
+                // 端侧初始化失败
+                if (com.example.philotes.utils.LlmConfig.isOpenAiConfigured()) {
+                    // 有 API 配置，切换到 OpenAI
+                    String errorMsg = "⚠️ 端侧 LLM 初始化失败\n正在切换到 OpenAI API...";
+                    statusText.setText(errorMsg);
+                    Toast.makeText(this, "切换到云端 AI", Toast.LENGTH_SHORT).show();
+                    initOpenAiService();
+                } else {
+                    // 没有 API 配置
+                    String errorMsg = "⚠️ 模拟器模式\n\n" +
+                                     "端侧 LLM 仅支持真实 ARM64 设备\n\n" +
+                                     "💡 提示：您可以配置 OpenAI API 在模拟器上使用 AI\n" +
+                                     "在代码中设置 LlmConfig.setOpenAiApiKey()";
+                    statusText.setText(errorMsg);
+
+                    btnParse.setEnabled(false);
+                    btnParse.setText("需配置 API 或使用真机");
+                    etInput.setEnabled(true);
+                    etInput.setHint("模拟器模式 - 需配置 OpenAI API");
+
+                    Toast.makeText(this, "请配置 OpenAI API 或在真机上运行", Toast.LENGTH_LONG).show();
+                }
+            } else {
+                // 端侧初始化成功
+                actionParser = new ActionParser(llmService);
+                btnParse.setEnabled(true);
+                btnParse.setText("AI 解析（端侧）");
+                etInput.setEnabled(true);
+                etInput.setHint("输入文本进行 AI 解析");
+                statusText.setText("✅ 端侧模型已就绪: " + modelFile.getName());
+                updateStatus("AI 模型已加载");
+            }
+        } catch (Exception e) {
+            String errorMsg = "模型加载异常: " + e.getMessage();
+            Log.e("MainActivity", errorMsg, e);
+
+            // 尝试使用 OpenAI API 作为备选
+            if (com.example.philotes.utils.LlmConfig.isOpenAiConfigured()) {
+                statusText.setText("端侧模型异常，切换到 OpenAI API...");
+                initOpenAiService();
+            } else {
+                statusText.setText(errorMsg + "\n\n您可以配置 OpenAI API");
+                btnParse.setEnabled(false);
+                etInput.setEnabled(true);
+                Toast.makeText(this, "模型加载失败", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    /**
+     * 初始化 OpenAI API 服务
+     */
+    private void initOpenAiService() {
+        try {
+            String apiKey = com.example.philotes.utils.LlmConfig.getOpenAiApiKey();
+            String baseUrl = com.example.philotes.utils.LlmConfig.getOpenAiBaseUrl();
+            String model = com.example.philotes.utils.LlmConfig.getOpenAiModel();
+
+            com.example.philotes.data.api.OpenAIService openAiService =
+                new com.example.philotes.data.api.OpenAIService(apiKey, baseUrl, model);
+
+            actionParser = new ActionParser(openAiService);
+
+            btnParse.setEnabled(true);
+            btnParse.setText("AI 解析（云端）");
+            etInput.setEnabled(true);
+            etInput.setHint("输入文本进行 AI 解析（使用 " + model + "）");
+            statusText.setText("✅ OpenAI API 已就绪\n模型: " + model + "\n模式: 云端推理");
+
+            Toast.makeText(this, "使用 OpenAI API - 可在模拟器运行", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            String errorMsg = "OpenAI API 初始化失败: " + e.getMessage();
+            Log.e("MainActivity", errorMsg, e);
+            statusText.setText(errorMsg);
+            btnParse.setEnabled(false);
+            Toast.makeText(this, "API 初始化失败", Toast.LENGTH_SHORT).show();
+        }
     }
 }

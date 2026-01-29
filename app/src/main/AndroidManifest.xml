@@ -50,6 +50,11 @@
             android:label="动作详情"
             android:theme="@style/Theme.Philotes" />
 
+        <activity android:name=".SettingsActivity"
+            android:label="AI 设置"
+            android:theme="@style/Theme.Philotes"
+            android:parentActivityName=".MainActivity" />
+
         <service
             android:name=".FloatingButtonService"
             android:enabled="true"

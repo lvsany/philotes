@@ -1,18 +1,15 @@
 package com.example.philotes;
 
 import android.accessibilityservice.AccessibilityService;
-import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
@@ -34,7 +31,6 @@ import java.io.IOException;
 public class FloatingButtonService extends AccessibilityService {
     private static final String CHANNEL_ID = "FloatingButtonServiceChannel";
     private static final String TAG = "FloatingButtonService";
-    private static final boolean USE_MOCK_ONLY = true;
 
     private WindowManager windowManager;
     private View floatingView;
@@ -90,7 +86,7 @@ public class FloatingButtonService extends AccessibilityService {
 
         btnClose.setOnClickListener(v -> showIconMode());
         btnAction.setOnClickListener(v -> {
-            Toast.makeText(this, "动作已执行 (Mock)", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "动作已执行", Toast.LENGTH_SHORT).show();
             showIconMode();
         });
 
@@ -190,20 +186,12 @@ public class FloatingButtonService extends AccessibilityService {
 
     private void onFloatingButtonClick() {
         if (floatingView == null) return;
-        if (USE_MOCK_ONLY) {
-            processAndShowCard(null);
-            return;
-        }
         floatingView.setVisibility(View.GONE);
         // 给一点时间让悬浮球消失，避免出现在截屏中
         new Handler(Looper.getMainLooper()).postDelayed(this::performCapture, 150);
     }
 
     private void performCapture() {
-        if (USE_MOCK_ONLY) {
-            processAndShowCard(null);
-            return;
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
@@ -220,33 +208,41 @@ public class FloatingButtonService extends AccessibilityService {
                                     processBitmap(softwareBitmap);
                                 } else {
                                     Log.e(TAG, "Failed to copy hardware bitmap to software");
-                                    recoverFloatingView();
+                                    showErrorAndRecover("截屏失败：无法处理图像");
                                 }
                             } else {
                                 Log.e(TAG, "Bitmap wrapHardwareBuffer returned null");
-                                recoverFloatingView();
+                                showErrorAndRecover("截屏失败：图像为空");
                             }
                         } catch (Exception e) {
                             Log.e(TAG, "Error processing screenshot result", e);
-                            recoverFloatingView();
+                            showErrorAndRecover("截屏处理失败");
                         }
                     }
 
                     @Override
                     public void onFailure(int errorCode) {
                         Log.e(TAG, "Screenshot failed with code: " + errorCode);
-                        Toast.makeText(FloatingButtonService.this, "截屏失败: " + errorCode, Toast.LENGTH_SHORT).show();
-                        recoverFloatingView();
+                        showErrorAndRecover("截屏失败（错误码: " + errorCode + "）\n请确保已授予截屏权限");
                     }
                 });
+            } catch (SecurityException e) {
+                Log.e(TAG, "takeScreenshot security exception - missing permission", e);
+                showErrorAndRecover("截屏权限未授予\n请重新开启辅助功能服务");
             } catch (Exception e) {
                 Log.e(TAG, "takeScreenshot threw exception", e);
-                recoverFloatingView();
+                showErrorAndRecover("截屏失败：" + e.getMessage());
             }
         } else {
-            Toast.makeText(this, "当前系统版本不支持直接截屏分析", Toast.LENGTH_SHORT).show();
-            recoverFloatingView();
+            showErrorAndRecover("当前系统版本不支持直接截屏分析\n需要 Android 11+");
         }
+    }
+
+    private void showErrorAndRecover(String errorMessage) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Toast.makeText(FloatingButtonService.this, errorMessage, Toast.LENGTH_LONG).show();
+            recoverFloatingView();
+        });
     }
 
     private void processBitmap(Bitmap bitmap) {
@@ -277,25 +273,23 @@ public class FloatingButtonService extends AccessibilityService {
     }
 
     private void processAndShowCard(File imageFile) {
-        // 在实际开发中，这里会调用 AI 接口分析图片
-        // 模拟分析过程
+        // 使用实际的 AI 接口分析图片
         new Handler(Looper.getMainLooper()).post(() -> {
             showCardMode("正在深度分析屏幕内容...");
 
             new Thread(() -> {
                 try {
-                    Thread.sleep(2000); // 模拟网络延迟或 AI 计算耗时
+                    // TODO: 集成实际的 OCR 和 AI 分析服务
+                    // 1. 对图片进行 OCR 识别
+                    // 2. 使用 AI 模型解析文本内容
+                    // 3. 生成 ActionPlan
 
-                    String[] mockResults = {
-                        "识别到日程安排：\n\n- 时间：本周五下午 14:00\n- 内容：与产品经理对接需求\n- 地点：3号会议室\n- 建议：点击“执行”添加到日历",
-                        "识别到餐厅信息：\n\n- 店名：炭火烤肉(人民路店)\n- 地址：人民路 123 号\n- 动作：点击“执行”开启导航",
-                        "识别到待办事项：\n\n- 项目：Philotes APP 开发\n- 任务：完善 LLM 接口对接\n- 优先级：高\n- 动作：点击“执行”添加到待办列表",
-                        "发现优惠活动：\n\n- 内容：某咖啡买一送一券\n- 有效期：截止今晚 23:59\n- 动作：点击“执行”保存到优惠券包"
-                    };
+                    Thread.sleep(2000); // AI 处理耗时
 
-                    String randomResult = mockResults[(int) (Math.random() * mockResults.length)];
+                    // 暂时显示处理中的状态
+                    String result = "图片分析功能正在开发中\n请使用主界面的文本输入功能";
 
-                    new Handler(Looper.getMainLooper()).post(() -> showCardMode(randomResult));
+                    new Handler(Looper.getMainLooper()).post(() -> showCardMode(result));
                 } catch (InterruptedException e) {
                     Log.e(TAG, "Analysis interrupted", e);
                 }

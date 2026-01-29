@@ -53,9 +53,10 @@ public class ActionParser {
                 String cleanJson = jsonStr.replace("```json", "").replace("```", "").trim();
                 return gson.fromJson(cleanJson, ActionPlan.class);
             } else {
-                throw new Exception("LLM returned null");
+                throw new Exception("LLM returned null - 可能是 API Key 无效或网络错误");
             }
         } catch (Exception e) {
+            System.err.println("ActionParser Error: " + e.getMessage());
             e.printStackTrace();
             // Fallback
             ActionPlan fallback = new ActionPlan();
