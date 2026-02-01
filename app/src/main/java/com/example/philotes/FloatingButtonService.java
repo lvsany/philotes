@@ -243,26 +243,68 @@ public class FloatingButtonService extends AccessibilityService {
                 takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
                     @Override
                     public void onSuccess(@NonNull ScreenshotResult result) {
-                        try (android.hardware.HardwareBuffer hardwareBuffer = result.getHardwareBuffer()) {
-                            Bitmap bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, result.getColorSpace());
-                            if (bitmap != null) {
-                                // 必须复制硬件 Bitmap 到软件 Bitmap，因为 HardwareBuffer 会失效
-                                // 而且硬件 Bitmap 不支持某些操作（如 compress 在旧版本上）
-                                Bitmap softwareBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false);
-                                bitmap.recycle();
-                                if (softwareBitmap != null) {
-                                    processBitmap(softwareBitmap);
-                                } else {
-                                    Log.e(TAG, "Failed to copy hardware bitmap to software");
-                                    showErrorAndRecover("截屏失败：无法处理图像");
-                                }
-                            } else {
-                                Log.e(TAG, "Bitmap wrapHardwareBuffer returned null");
-                                showErrorAndRecover("截屏失败：图像为空");
+                        Bitmap softwareBitmap = null;
+                        try {
+                            // 获取 HardwareBuffer 并立即转换为软件 Bitmap
+                            android.hardware.HardwareBuffer hardwareBuffer = result.getHardwareBuffer();
+                            if (hardwareBuffer == null) {
+                                Log.e(TAG, "HardwareBuffer is null");
+                                showErrorAndRecover("截屏失败：无法获取图像缓冲区");
+                                return;
                             }
+
+                            // 包装硬件缓冲区为 Bitmap
+                            Bitmap hardwareBitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, result.getColorSpace());
+                            if (hardwareBitmap == null) {
+                                Log.e(TAG, "Bitmap wrapHardwareBuffer returned null");
+                                hardwareBuffer.close();
+                                showErrorAndRecover("截屏失败：图像为空");
+                                return;
+                            }
+
+                            // 立即复制到软件 Bitmap（使用 ARGB_8888 格式）
+                            // 必须先将硬件 Bitmap 复制为软件 Bitmap，因为 ML Kit 和某些渲染操作不支持硬件 Bitmap
+                            // 使用 copy() 方法而不是 Canvas，这样可以确保创建真正的软件 Bitmap
+                            softwareBitmap = hardwareBitmap.copy(Bitmap.Config.ARGB_8888, true);
+
+                            // 立即释放硬件资源
+                            hardwareBitmap.recycle();
+                            hardwareBuffer.close();
+
+                            // 验证是否成功创建软件 Bitmap
+                            if (softwareBitmap == null) {
+                                Log.e(TAG, "Failed to copy hardware bitmap to software bitmap");
+                                showErrorAndRecover("截屏失败：无法转换图像格式");
+                                return;
+                            }
+
+                            // 双重检查：如果仍然是硬件 Bitmap，再次转换
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                                softwareBitmap.getConfig() == Bitmap.Config.HARDWARE) {
+                                Log.w(TAG, "Bitmap still in HARDWARE config, converting again...");
+                                Bitmap temp = softwareBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                                softwareBitmap.recycle();
+                                softwareBitmap = temp;
+                                if (softwareBitmap == null || softwareBitmap.getConfig() == Bitmap.Config.HARDWARE) {
+                                    Log.e(TAG, "Unable to convert hardware bitmap to software bitmap");
+                                    if (softwareBitmap != null) softwareBitmap.recycle();
+                                    showErrorAndRecover("截屏失败：设备不支持图像格式转换");
+                                    return;
+                                }
+                            }
+
+                            Log.d(TAG, "Successfully converted hardware bitmap to software bitmap: "
+                                + softwareBitmap.getWidth() + "x" + softwareBitmap.getHeight());
+
+                            // 处理软件 Bitmap
+                            processBitmap(softwareBitmap);
+
                         } catch (Exception e) {
                             Log.e(TAG, "Error processing screenshot result", e);
-                            showErrorAndRecover("截屏处理失败");
+                            if (softwareBitmap != null) {
+                                softwareBitmap.recycle();
+                            }
+                            showErrorAndRecover("截屏处理失败: " + e.getMessage());
                         }
                     }
 
@@ -324,41 +366,68 @@ public class FloatingButtonService extends AccessibilityService {
             showCardMode("正在识别屏幕文字...");
 
             new Thread(() -> {
+                Bitmap mutableBitmap = null;
                 try {
-                    // 1. 加载图片
-                    final Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+                    // 1. 加载图片 - 使用 BitmapFactory.Options 确保格式正确
+                    BitmapFactory.Options options = new BitmapFactory.Options();
+                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+                    options.inMutable = false; // 先加载为不可变的
+
+                    final Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath(), options);
                     if (bitmap == null) {
                         new Handler(Looper.getMainLooper()).post(() ->
-                            showCardMode("图片加载失败"));
+                            showCardMode("图片加载失败\n文件路径：" + imageFile.getAbsolutePath()));
                         return;
                     }
 
-                    // 2. 创建可变的Bitmap副本，确保ML Kit可以安全访问
-                    final Bitmap mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-                    bitmap.recycle(); // 立即释放原始bitmap
+                    Log.d(TAG, "Loaded bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight()
+                        + ", config: " + bitmap.getConfig() + ", isMutable: " + bitmap.isMutable());
+
+                    // 2. 确保创建一个可变的、ARGB_8888 格式的 Bitmap 副本
+                    // ML Kit 需要可以安全访问的像素数据，不能是 HARDWARE 配置
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                        bitmap.getConfig() == Bitmap.Config.HARDWARE) {
+                        Log.w(TAG, "Loaded bitmap is HARDWARE config, converting...");
+                        mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                        bitmap.recycle();
+                    } else {
+                        // 即使不是 HARDWARE，也创建一个 ARGB_8888 的可变副本
+                        mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                        bitmap.recycle();
+                    }
 
                     if (mutableBitmap == null) {
                         new Handler(Looper.getMainLooper()).post(() ->
-                            showCardMode("图片处理失败"));
+                            showCardMode("图片处理失败\n无法转换图像格式"));
                         return;
                     }
 
-                    // 3. 使用ML Kit进行OCR识别
+                    Log.d(TAG, "Created mutable bitmap for OCR: " + mutableBitmap.getWidth()
+                        + "x" + mutableBitmap.getHeight());
+
+                    final Bitmap finalBitmap = mutableBitmap;
+
+                    // 3. 在主线程执行 ML Kit OCR（ML Kit 内部会管理线程）
                     new Handler(Looper.getMainLooper()).post(() -> {
-                        MlKitOcrService.recognizeTextAsync(mutableBitmap,
+                        MlKitOcrService.recognizeTextAsync(finalBitmap,
                             new MlKitOcrService.OcrCallback() {
                                 @Override
                                 public void onSuccess(OcrResult result) {
                                     // OCR完成后释放bitmap
-                                    mutableBitmap.recycle();
+                                    finalBitmap.recycle();
+                                    Log.d(TAG, "OCR completed successfully");
 
                                     if (result.getTextBlocks().isEmpty()) {
-                                        showCardMode("未识别到文字\n请确保截图中包含清晰的文本内容");
+                                        showCardMode("未识别到文字\n\n可能原因：\n" +
+                                            "1. 截图中没有清晰的文本\n" +
+                                            "2. 文字太小或模糊\n" +
+                                            "3. 文字颜色与背景对比度低");
                                         return;
                                     }
 
                                     // OCR成功，继续AI解析
                                     String ocrText = result.toStructuredText();
+                                    Log.d(TAG, "OCR text length: " + ocrText.length());
                                     showCardMode("✅ 识别成功\n\n正在AI分析...");
 
                                     // 4. 自动进行AI解析
@@ -368,19 +437,35 @@ public class FloatingButtonService extends AccessibilityService {
                                 @Override
                                 public void onError(Exception e) {
                                     // 发生错误时也要释放bitmap
-                                    mutableBitmap.recycle();
+                                    finalBitmap.recycle();
 
                                     Log.e(TAG, "OCR error", e);
-                                    showCardMode("OCR识别失败\n" + e.getMessage() +
-                                        "\n\n可能原因：\n" +
-                                        "1. 图片中没有清晰的文字\n" +
-                                        "2. 首次使用需联网下载模型");
+                                    String errorMsg = "OCR识别失败\n\n";
+
+                                    if (e.getMessage() != null) {
+                                        if (e.getMessage().contains("empty result")) {
+                                            errorMsg += "图像处理失败 - 可能是图像格式问题\n\n";
+                                        } else {
+                                            errorMsg += "错误：" + e.getMessage() + "\n\n";
+                                        }
+                                    }
+
+                                    errorMsg += "可能的解决方法：\n" +
+                                        "1. 确保截图中有清晰的文字\n" +
+                                        "2. 首次使用需要联网下载OCR模型\n" +
+                                        "3. 重启应用后重试\n" +
+                                        "4. 检查存储权限";
+
+                                    showCardMode(errorMsg);
                                 }
                             });
                     });
 
                 } catch (Exception e) {
                     Log.e(TAG, "Analysis error", e);
+                    if (mutableBitmap != null && !mutableBitmap.isRecycled()) {
+                        mutableBitmap.recycle();
+                    }
                     new Handler(Looper.getMainLooper()).post(() ->
                         showCardMode("分析失败: " + e.getMessage()));
                 }
@@ -410,14 +495,24 @@ public class FloatingButtonService extends AccessibilityService {
         // 在后台线程执行AI解析
         new Thread(() -> {
             try {
-                ActionPlan actionPlan = actionParser.parse(ocrText);
+                Log.d(TAG, "Starting AI analysis");
+
+                // 使用分批处理方法，让 AI 先筛选有意义的文本块
+                ActionPlan actionPlan = actionParser.parseWithFilter(ocrResult);
+
+                Log.d(TAG, "AI analysis result: " + (actionPlan != null ? actionPlan.getType() : "null"));
 
                 if (actionPlan == null || actionPlan.getType() == com.example.philotes.data.model.ActionType.UNKNOWN) {
-                    // AI解析失败
+                    // AI解析失败 - 可能是文本内容不包含可识别的动作
                     new Handler(Looper.getMainLooper()).post(() -> {
                         String plainText = ocrResult.getPlainText();
-                        showCardMode("✅ 识别成功\n\n" + plainText +
-                            "\n\n⚠️ AI无法理解内容\n点击「查看」跳转主界面");
+                        String displayText = plainText.length() > 300 ?
+                            plainText.substring(0, 300) + "..." : plainText;
+
+                        showCardMode("✅ 识别成功\n\n" + displayText +
+                            "\n\n⚠️ AI无法识别动作\n" +
+                            "可能原因：截图内容不包含明确的任务/日程/导航信息\n" +
+                            "点击「执行」跳转主界面查看详情");
 
                         setupCardActionButton(() -> {
                             Intent intent = new Intent(FloatingButtonService.this, MainActivity.class);
