@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okio.BufferedSource;
 
 public class OpenAIService implements ILlmService {
     private final String apiKey;
@@ -109,5 +110,79 @@ public class OpenAIService implements ILlmService {
             e.printStackTrace();
         }
         return null;
+    }
+
+    @Override
+    public void streamChatCompletion(String systemPrompt, String userMessage, StreamListener listener) {
+        JsonObject systemMessage = new JsonObject();
+        systemMessage.addProperty("role", "system");
+        systemMessage.addProperty("content", systemPrompt);
+
+        JsonObject userMessageObj = new JsonObject();
+        userMessageObj.addProperty("role", "user");
+        userMessageObj.addProperty("content", userMessage);
+
+        JsonArray messages = new JsonArray();
+        messages.add(systemMessage);
+        messages.add(userMessageObj);
+
+        JsonObject requestBodyJson = new JsonObject();
+        requestBodyJson.addProperty("model", modelName);
+        requestBodyJson.add("messages", messages);
+        requestBodyJson.addProperty("temperature", 0.0);
+        requestBodyJson.addProperty("stream", true);
+
+        RequestBody body = RequestBody.create(requestBodyJson.toString(), JSON);
+
+        Request request = new Request.Builder()
+                .url(baseUrl + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                listener.onError(new IOException("API Error: " + response.code() + " " + response.message()));
+                return;
+            }
+
+            if (response.body() == null) {
+                listener.onError(new IOException("Empty streaming body"));
+                return;
+            }
+
+            BufferedSource source = response.body().source();
+            while (!source.exhausted()) {
+                String line = source.readUtf8Line();
+                if (line == null || line.isEmpty() || !line.startsWith("data: ")) {
+                    continue;
+                }
+
+                String data = line.substring(6).trim();
+                if ("[DONE]".equals(data)) {
+                    listener.onComplete();
+                    return;
+                }
+
+                try {
+                    JsonObject event = gson.fromJson(data, JsonObject.class);
+                    if (event != null && event.has("choices") && event.getAsJsonArray("choices").size() > 0) {
+                        JsonObject choice = event.getAsJsonArray("choices").get(0).getAsJsonObject();
+                        if (choice.has("delta")) {
+                            JsonObject delta = choice.getAsJsonObject("delta");
+                            if (delta.has("content")) {
+                                listener.onDelta(delta.get("content").getAsString());
+                            }
+                        }
+                    }
+                } catch (Exception parseError) {
+                    // Ignore malformed chunks and continue streaming.
+                }
+            }
+
+            listener.onComplete();
+        } catch (Exception e) {
+            listener.onError(e);
+        }
     }
 }

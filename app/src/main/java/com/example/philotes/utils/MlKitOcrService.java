@@ -1,9 +1,12 @@
 package com.example.philotes.utils;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.util.Log;
+
 import androidx.annotation.NonNull;
+
 import com.example.philotes.data.model.OcrResult;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -13,6 +16,9 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
+/**
+ * ML Kit OCR fallback service.
+ */
 public class MlKitOcrService {
     private static final String TAG = "MlKitOcrService";
     private static TextRecognizer recognizer;
@@ -24,9 +30,10 @@ public class MlKitOcrService {
         return recognizer;
     }
 
-    public static void recognizeTextAsync(Bitmap bitmap, final OcrCallback callback) {
+    public static void recognizeTextAsync(Context context, Bitmap bitmap, final OcrCallback callback) {
         if (bitmap == null) {
-            if (callback != null) callback.onError(new IllegalArgumentException("Bitmap is null"));
+            if (callback != null)
+                callback.onError(new IllegalArgumentException("Bitmap is null"));
             return;
         }
 
@@ -44,15 +51,17 @@ public class MlKitOcrService {
                                 result.addTextBlock(blockText, boundingBox, 0.9f);
                             }
                         }
-                        Log.i(TAG, "OCR completed: " + result.getTextBlocks().size() + " blocks");
-                        if (callback != null) callback.onSuccess(result);
+                        Log.i(TAG, "ML Kit OCR completed: " + result.getTextBlocks().size() + " blocks");
+                        if (callback != null)
+                            callback.onSuccess(result);
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "OCR failed", e);
-                        if (callback != null) callback.onError(e);
+                        Log.e(TAG, "ML Kit OCR failed", e);
+                        if (callback != null)
+                            callback.onError(e);
                     }
                 });
     }
@@ -66,6 +75,7 @@ public class MlKitOcrService {
 
     public interface OcrCallback {
         void onSuccess(OcrResult result);
+
         void onError(Exception e);
     }
 }

@@ -3,6 +3,11 @@ package com.example.philotes.utils;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * AI 设置管理类
  * 使用 SharedPreferences 存储用户配置
@@ -12,20 +17,23 @@ public class AiSettingsManager {
     private static final String PREFS_NAME = "ai_settings";
 
     // Keys
-    private static final String KEY_AI_MODE = "ai_mode";
     private static final String KEY_API_KEY = "api_key";
     private static final String KEY_BASE_URL = "base_url";
     private static final String KEY_MODEL_NAME = "model_name";
-    private static final String KEY_API_PROVIDER = "api_provider"; // 新增：保存提供商类型
-
-    // AI 模式常量
-    public static final String MODE_ON_DEVICE = "on_device";
-    public static final String MODE_CLOUD_API = "cloud_api";
+    private static final String KEY_API_PROVIDER = "api_provider";
+    private static final String KEY_ROUTING_POLICY = "routing_policy";
+    private static final String KEY_CUSTOM_TRIGGER_KEYWORDS = "custom_trigger_keywords";
+    private static final String KEY_KEYWORDS_SEEDED = "keywords_seeded";
 
     // API 提供商常量
     public static final String PROVIDER_OPENAI = "openai";
     public static final String PROVIDER_DEEPSEEK = "deepseek";
     public static final String PROVIDER_CUSTOM = "custom";
+
+    // 路由策略
+    public static final String ROUTING_SMART = "smart";
+    public static final String ROUTING_LOCAL_ONLY = "local_only";
+    public static final String ROUTING_CLOUD_ONLY = "cloud_only";
 
     private final SharedPreferences prefs;
 
@@ -34,24 +42,10 @@ public class AiSettingsManager {
     }
 
     /**
-     * 设置 AI 模式
+     * 是否需要云端配置（路由策略不是强制端侧时，云端 API 配置生效）
      */
-    public void setAiMode(String mode) {
-        prefs.edit().putString(KEY_AI_MODE, mode).apply();
-    }
-
-    /**
-     * 获取 AI 模式
-     */
-    public String getAiMode() {
-        return prefs.getString(KEY_AI_MODE, MODE_ON_DEVICE);
-    }
-
-    /**
-     * 是否使用云端 API
-     */
-    public boolean isCloudApiMode() {
-        return MODE_CLOUD_API.equals(getAiMode());
+    public boolean needsCloudConfig() {
+        return !ROUTING_LOCAL_ONLY.equals(getRoutingPolicy());
     }
 
     /**
@@ -110,6 +104,43 @@ public class AiSettingsManager {
         return prefs.getString(KEY_API_PROVIDER, PROVIDER_OPENAI);
     }
 
+    public void setRoutingPolicy(String policy) {
+        prefs.edit().putString(KEY_ROUTING_POLICY, policy).apply();
+    }
+
+    public String getRoutingPolicy() {
+        return prefs.getString(KEY_ROUTING_POLICY, ROUTING_SMART);
+    }
+
+    public void setCustomTriggerKeywords(List<String> keywords) {
+        Set<String> set = new LinkedHashSet<>();
+        if (keywords != null) {
+            for (String keyword : keywords) {
+                if (keyword == null) {
+                    continue;
+                }
+                String trimmed = keyword.trim();
+                if (!trimmed.isEmpty()) {
+                    set.add(trimmed);
+                }
+            }
+        }
+        prefs.edit().putStringSet(KEY_CUSTOM_TRIGGER_KEYWORDS, set).apply();
+    }
+
+    public List<String> getCustomTriggerKeywords() {
+        Set<String> set = prefs.getStringSet(KEY_CUSTOM_TRIGGER_KEYWORDS, new LinkedHashSet<>());
+        return new ArrayList<>(set == null ? new LinkedHashSet<>() : set);
+    }
+
+    public boolean isKeywordsSeeded() {
+        return prefs.getBoolean(KEY_KEYWORDS_SEEDED, false);
+    }
+
+    public void markKeywordsSeeded() {
+        prefs.edit().putBoolean(KEY_KEYWORDS_SEEDED, true).apply();
+    }
+
     /**
      * 检查 API 是否已配置
      */
@@ -122,7 +153,7 @@ public class AiSettingsManager {
      * 应用当前设置到 LlmConfig
      */
     public void applyToLlmConfig() {
-        if (isCloudApiMode() && isApiConfigured()) {
+        if (needsCloudConfig() && isApiConfigured()) {
             LlmConfig.setOpenAiApiKey(getApiKey());
             LlmConfig.setOpenAiBaseUrl(getBaseUrl());
             LlmConfig.setOpenAiModel(getModelName());

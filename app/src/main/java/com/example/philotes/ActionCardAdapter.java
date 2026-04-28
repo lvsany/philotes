@@ -11,21 +11,22 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.philotes.data.model.ActionPlan;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class ActionCardAdapter extends RecyclerView.Adapter<ActionCardAdapter.ViewHolder> {
 
-    private List<ActionPlan> planList;
-    private OnActionClickListener listener;
+    private final List<ActionCardItem> cardList;
+    private final OnActionClickListener listener;
 
     public interface OnActionClickListener {
         void onExecute(ActionPlan plan);
         void onEdit(ActionPlan plan);
     }
 
-    public ActionCardAdapter(List<ActionPlan> planList, OnActionClickListener listener) {
-        this.planList = planList;
+    public ActionCardAdapter(List<ActionCardItem> cardList, OnActionClickListener listener) {
+        this.cardList = cardList == null ? new ArrayList<>() : cardList;
         this.listener = listener;
     }
 
@@ -39,7 +40,32 @@ public class ActionCardAdapter extends RecyclerView.Adapter<ActionCardAdapter.Vi
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        ActionPlan plan = planList.get(position);
+        ActionCardItem card = cardList.get(position);
+
+        if (card.isStreaming()) {
+            holder.tvActionTitle.setText("实时解析中...");
+            holder.tvConfidence.setText("...");
+            String text = card.getStreamingText();
+            holder.tvActionDetails.setText(text == null || text.trim().isEmpty() ? "模型推理中，请稍候" : text);
+            holder.btnExecute.setVisibility(View.GONE);
+            holder.btnEdit.setVisibility(View.GONE);
+            holder.btnExecute.setOnClickListener(null);
+            holder.btnEdit.setOnClickListener(null);
+            return;
+        }
+
+        ActionPlan plan = card.getPlan();
+        if (plan == null) {
+            holder.tvActionTitle.setText("解析异常");
+            holder.tvConfidence.setText("0%");
+            holder.tvActionDetails.setText("未收到有效动作结果");
+            holder.btnExecute.setVisibility(View.GONE);
+            holder.btnEdit.setVisibility(View.GONE);
+            return;
+        }
+
+        holder.btnExecute.setVisibility(View.VISIBLE);
+        holder.btnEdit.setVisibility(View.VISIBLE);
 
         // Bind Title & Confidence
         String title = "未知动作";
@@ -79,12 +105,56 @@ public class ActionCardAdapter extends RecyclerView.Adapter<ActionCardAdapter.Vi
 
     @Override
     public int getItemCount() {
-        return planList.size();
+        return cardList.size();
     }
 
-    public void addCard(ActionPlan plan) {
-        planList.add(0, plan);
+    public void showStreamingCard(String requestId) {
+        int index = findCardIndex(requestId);
+        if (index >= 0) {
+            cardList.set(index, ActionCardItem.streaming(requestId, ""));
+            notifyItemChanged(index);
+            return;
+        }
+        cardList.add(0, ActionCardItem.streaming(requestId, ""));
         notifyItemInserted(0);
+    }
+
+    public void updateStreamingCard(String requestId, String streamingText) {
+        int index = findCardIndex(requestId);
+        if (index < 0) {
+            return;
+        }
+        cardList.set(index, ActionCardItem.streaming(requestId, streamingText));
+        notifyItemChanged(index);
+    }
+
+    public int replaceStreamingCard(String requestId, ActionPlan plan) {
+        int index = findCardIndex(requestId);
+        if (index >= 0) {
+            cardList.set(index, ActionCardItem.result(requestId, plan));
+            notifyItemChanged(index);
+            return index;
+        }
+        cardList.add(0, ActionCardItem.result(requestId, plan));
+        notifyItemInserted(0);
+        return 0;
+    }
+
+    public void removeCardByRequestId(String requestId) {
+        int index = findCardIndex(requestId);
+        if (index >= 0) {
+            cardList.remove(index);
+            notifyItemRemoved(index);
+        }
+    }
+
+    private int findCardIndex(String requestId) {
+        for (int i = 0; i < cardList.size(); i++) {
+            if (requestId.equals(cardList.get(i).getRequestId())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

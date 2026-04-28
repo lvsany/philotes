@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/bg_card_surface">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="完成一次配置以启用智能体"
+        android:textSize="20sp"
+        android:fontFamily="sans-serif-medium"
+        android:textColor="#0E1C36" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="你可以下载本地模型，或在设置里配置云端 API。配置完成后即可一键解析并执行动作。"
+        android:textSize="14sp"
+        android:textColor="#486083" />
+
+    <Button
+        android:id="@+id/btnSheetToSettings"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_button_primary"
+        android:text="前往设置"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF" />
+
+    <Button
+        android:id="@+id/btnSheetDismiss"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_button_ghost"
+        android:text="稍后"
+        android:textAllCaps="false"
+        android:textColor="#34598E" />
+
+</LinearLayout>

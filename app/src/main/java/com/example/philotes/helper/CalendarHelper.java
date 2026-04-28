@@ -1,7 +1,5 @@
 package com.example.philotes.helper;
 
-import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -98,52 +96,6 @@ public class CalendarHelper {
         } catch (Exception e) {
             Log.e(TAG, "无法打开系统日历", e);
             return null;
-        }
-    }
-
-    /**
-     * 获取第一个可用的日历ID
-     */
-    private static long getFirstCalendarId(Context context) {
-        String[] projection = {CalendarContract.Calendars._ID};
-        android.database.Cursor cursor = context.getContentResolver().query(
-                CalendarContract.Calendars.CONTENT_URI,
-                projection,
-                null,
-                null,
-                null
-        );
-
-        if (cursor != null && cursor.moveToFirst()) {
-            long calendarId = cursor.getLong(0);
-            cursor.close();
-            return calendarId;
-        }
-
-        if (cursor != null) {
-            cursor.close();
-        }
-        return -1;
-    }
-
-    /**
-     * 为事件添加提醒
-     *
-     * @param context     上下文
-     * @param eventId     事件ID
-     * @param minutesBefore 提前多少分钟提醒
-     */
-    private static void addReminder(Context context, long eventId, int minutesBefore) {
-        try {
-            ContentValues values = new ContentValues();
-            values.put(CalendarContract.Reminders.EVENT_ID, eventId);
-            values.put(CalendarContract.Reminders.MINUTES, minutesBefore);
-            values.put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT);
-
-            context.getContentResolver().insert(CalendarContract.Reminders.CONTENT_URI, values);
-            Log.d(TAG, "提醒添加成功: 提前" + minutesBefore + "分钟");
-        } catch (Exception e) {
-            Log.e(TAG, "添加提醒失败", e);
         }
     }
 

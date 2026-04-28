@@ -1,32 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@drawable/bg_main_gradient">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <!-- 标题 -->
-        <TextView
+        <ScrollView
             android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="AI 模型设置"
-            android:textSize="24sp"
+            android:text="AI Settings"
+            android:textSize="28sp"
+            android:fontFamily="sans-serif-medium"
             android:textStyle="bold"
-            android:layout_marginBottom="24dp"/>
+            android:textColor="#12284A"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="选择推理模式并完成 API 配置"
+            android:textSize="13sp"
+            android:textColor="#5A6F8F"
+            android:layout_marginBottom="16dp" />
 
         <!-- AI 模式选择 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="#DBE6FA"
+            app:strokeWidth="1dp"
+            app:cardBackgroundColor="#FFFFFFFF">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -38,49 +61,140 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="AI 模式"
-                    android:textSize="18sp"
+                    android:textSize="17sp"
+                    android:fontFamily="sans-serif-medium"
                     android:textStyle="bold"
+                    android:textColor="#0E1C36"
                     android:layout_marginBottom="8dp"/>
 
-                <RadioGroup
-                    android:id="@+id/rgAiMode"
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
-                    <RadioButton
-                        android:id="@+id/rbOnDevice"
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardModeOnDevice"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="端侧模型（本地推理）"
-                        android:padding="8dp"/>
+                        android:layout_marginBottom="10dp"
+                        app:cardCornerRadius="14dp"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="#00000000">
 
-                    <TextView
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_mode_option_default"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:padding="14dp">
+
+                            <ImageView
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:src="@android:drawable/ic_menu_manage"
+                                android:tint="#355A90"
+                                android:contentDescription="本地推理图标" />
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:layout_marginStart="10dp"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:id="@+id/rbOnDevice"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="端侧模型（本地推理）"
+                                    android:textColor="#102445"
+                                    android:textStyle="bold"
+                                    android:textSize="14sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="离线可用，隐私更好，需要下载模型"
+                                    android:textColor="#5C6F8D"
+                                    android:textSize="12sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/tvCheckOnDevice"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:background="@drawable/bg_check_badge"
+                                android:gravity="center"
+                                android:text="✓"
+                                android:textColor="#FFFFFF"
+                                android:textStyle="bold"
+                                android:visibility="gone" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardModeCloud"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="• 完全离线，隐私安全\n• 需要下载模型文件（约2GB）\n• 仅支持真实设备"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/darker_gray"
-                        android:paddingStart="32dp"
-                        android:paddingEnd="8dp"
-                        android:layout_marginBottom="8dp"/>
+                        app:cardCornerRadius="14dp"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="#00000000">
 
-                    <RadioButton
-                        android:id="@+id/rbCloudApi"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="云端 API（联网模式）"
-                        android:padding="8dp"/>
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_mode_option_default"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:padding="14dp">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="• 支持模拟器和真机\n• 需要网络连接\n• 模型能力更强"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/darker_gray"
-                        android:paddingStart="32dp"
-                        android:paddingEnd="8dp"/>
+                            <ImageView
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:src="@android:drawable/ic_menu_upload"
+                                android:tint="#355A90"
+                                android:contentDescription="云端模式图标" />
 
-                </RadioGroup>
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:layout_marginStart="10dp"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:id="@+id/rbCloudApi"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="云端 API（联网模式）"
+                                    android:textColor="#102445"
+                                    android:textStyle="bold"
+                                    android:textSize="14sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="支持模拟器，能力更强，需要网络"
+                                    android:textColor="#5C6F8D"
+                                    android:textSize="12sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/tvCheckCloud"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:background="@drawable/bg_check_badge"
+                                android:gravity="center"
+                                android:text="✓"
+                                android:textColor="#FFFFFF"
+                                android:textStyle="bold"
+                                android:visibility="gone" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
 
             </LinearLayout>
 
@@ -92,8 +206,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="#DBE6FA"
+            app:strokeWidth="1dp"
+            app:cardBackgroundColor="#FFFFFFFF">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -105,8 +222,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="云端 API 配置"
-                    android:textSize="18sp"
+                    android:textSize="17sp"
+                    android:fontFamily="sans-serif-medium"
                     android:textStyle="bold"
+                    android:textColor="#0E1C36"
                     android:layout_marginBottom="16dp"/>
 
                 <!-- API Provider 选择 -->
@@ -115,6 +234,8 @@
                     android:layout_height="wrap_content"
                     android:text="API 提供商"
                     android:textSize="14sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="#1D355B"
                     android:layout_marginBottom="4dp"/>
 
                 <Spinner
@@ -122,6 +243,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"
+                    android:background="@drawable/bg_field_surface"
                     android:layout_marginBottom="16dp"/>
 
                 <!-- API Key -->
@@ -177,10 +299,13 @@
                 <Button
                     android:id="@+id/btnTestConnection"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_button_ghost"
                     android:text="测试连接"
+                    android:textAllCaps="false"
+                    android:textColor="#355B95"
                     android:layout_marginTop="8dp"
-                    style="@style/Widget.Material3.Button.OutlinedButton"/>
+                    android:fontFamily="sans-serif-medium"/>
 
             </LinearLayout>
 
@@ -191,9 +316,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="#E3F2FD">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="#BFD6FB"
+            app:strokeWidth="1dp"
+            app:cardBackgroundColor="#EAF3FF">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -206,7 +333,9 @@
                     android:layout_height="wrap_content"
                     android:text="当前状态"
                     android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium"
                     android:textStyle="bold"
+                    android:textColor="#0F2C5A"
                     android:layout_marginBottom="8dp"/>
 
                 <TextView
@@ -215,22 +344,38 @@
                     android:layout_height="wrap_content"
                     android:text="未配置"
                     android:textSize="14sp"
-                    android:textColor="@android:color/black"/>
+                    android:fontFamily="sans-serif"
+                    android:textColor="#1A3C6B"/>
 
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
 
         <!-- 保存按钮 -->
-        <Button
-            android:id="@+id/btnSave"
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_button_save_soft"
+                    android:text="保存设置"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginTop="24dp"
+                    android:layout_marginBottom="28dp"/>
+
+            </LinearLayout>
+        </ScrollView>
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNav"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="保存设置"
-            android:textSize="16sp"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp"/>
-
+            android:background="@android:color/white"
+            app:itemIconTint="@color/brand_primary"
+            app:itemTextColor="@color/brand_primary"
+            app:menu="@menu/menu_main_bottom_nav" />
     </LinearLayout>
 
-</ScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
