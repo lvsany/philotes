@@ -97,7 +97,51 @@ public final class RuleEngine {
     }
 
     public void resetDefaultRules() {
-        updateRules(Collections.emptyList(), Collections.emptyList());
+        List<String> defaultKeywords = new ArrayList<>(java.util.Arrays.asList(
+            // 日历/日程类
+            "开会", "会议", "面试", "约", "预约", "约定", "约好", "聚餐", "聚会",
+            "生日", "纪念日", "培训", "讲座", "研讨", "汇报", "演讲", "答辩",
+            "明天", "后天", "下周", "下个月", "下午", "上午", "晚上", "早上",
+            "点钟", "半", "提醒我", "别忘了", "记得",
+            // 导航类
+            "导航", "去哪", "怎么去", "如何去", "去哪里", "路线", "附近",
+            "在哪", "地址", "位置", "到达", "出发", "到xx", "去xx",
+            "机场", "火车站", "高铁站", "地铁站", "医院", "学校", "公司",
+            // 待办类
+            "待办", "任务", "to-do", "todo", "清单", "列表",
+            "买", "购买", "采购", "需要", "还没", "忘了",
+            "提交", "完成", "处理", "回复", "联系", "发邮件", "发消息",
+            // 复制/保存类
+            "保存", "记下", "记录", "摘录", "收藏", "复制"
+        ));
+
+        List<String> defaultRegexes = new ArrayList<>(java.util.Arrays.asList(
+            // 时间模式：xx点/xx:xx
+            "\\d{1,2}[点:：]\\d{0,2}",
+            // 日期模式：x月x日、x/x
+            "\\d{1,2}月\\d{1,2}[日号]",
+            // 周几
+            "周[一二三四五六七日天]|星期[一二三四五六七日天]",
+            // 导航目的地模式
+            "去.{1,10}(路|街|区|市|省|县|镇|村|楼|广场|中心|大厦|酒店|餐厅|公园)"
+        ));
+
+        updateRules(defaultKeywords, defaultRegexes);
+    }
+
+    /**
+     * 在默认规则基础上追加用户自定义关键词，不清空已有规则。
+     */
+    public void addCustomKeywords(List<String> keywords) {
+        if (keywords == null) return;
+        for (String keyword : keywords) {
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String normalized = keyword.trim().toLowerCase(Locale.ROOT);
+                if (!keywordRules.contains(normalized)) {
+                    keywordRules.add(normalized);
+                }
+            }
+        }
     }
 
     public List<String> getKeywordRulesSnapshot() {

@@ -159,12 +159,24 @@ public class ActionParser {
      * 从文本中提取多个可执行动作（最多3个），结合匹配关键词作为上下文提示。
      */
     public List<ActionPlan> parseMultiple(String text, String matchedKeyword) {
+        return parseMultiple(text, matchedKeyword, null);
+    }
+
+    /**
+     * 从文本中提取多个可执行动作，支持注入设备情境描述（情境感知）。
+     *
+     * @param contextDescriptor 由 ContextEnricher 生成的设备状态描述，为 null 时忽略
+     */
+    public List<ActionPlan> parseMultiple(String text, String matchedKeyword, String contextDescriptor) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
         String currentDate = sdf.format(new Date());
         String keywordHint = (matchedKeyword != null && !matchedKeyword.isEmpty())
                 ? "\n当前触发关键词: \"" + matchedKeyword + "\"（请优先提取与此相关的动作）"
                 : "";
-        String fullPrompt = parseMultiplePrompt + keywordHint + "\n当前日期: " + currentDate;
+        String contextHint = (contextDescriptor != null && !contextDescriptor.isEmpty())
+                ? "\n\n" + contextDescriptor
+                : "";
+        String fullPrompt = parseMultiplePrompt + keywordHint + "\n当前日期: " + currentDate + contextHint;
 
         String jsonStr = llmService.chatCompletion(fullPrompt, text);
         return parseJsonArrayResponse(jsonStr, text);
@@ -175,6 +187,14 @@ public class ActionParser {
      * 超出 MAX_CHARS_PER_BATCH*3 时截断，避免 token 过多。
      */
     public List<ActionPlan> parseMultipleWithFilter(OcrResult ocrResult, String matchedKeyword) {
+        return parseMultipleWithFilter(ocrResult, matchedKeyword, null);
+    }
+
+    /**
+     * 支持注入设备情境描述的 OCR 多计划解析入口。
+     */
+    public List<ActionPlan> parseMultipleWithFilter(OcrResult ocrResult, String matchedKeyword,
+                                                    String contextDescriptor) {
         if (ocrResult == null || ocrResult.getTextBlocks().isEmpty()) {
             return Collections.emptyList();
         }
@@ -191,7 +211,7 @@ public class ActionParser {
 
         if (merged.length() == 0) return Collections.emptyList();
 
-        return parseMultiple(merged.toString(), matchedKeyword);
+        return parseMultiple(merged.toString(), matchedKeyword, contextDescriptor);
     }
 
     private List<ActionPlan> parseJsonArrayResponse(String jsonStr, String originalText) {

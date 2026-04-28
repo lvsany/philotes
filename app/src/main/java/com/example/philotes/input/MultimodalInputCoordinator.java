@@ -83,17 +83,32 @@ public class MultimodalInputCoordinator {
     }
 
     public List<ActionPlan> parseTextMultiple(String text, String matchedKeyword) {
+        return parseTextMultiple(text, matchedKeyword, null);
+    }
+
+    /**
+     * 带情境感知的文本多意图解析。contextDescriptor 由 ContextEnricher 生成。
+     */
+    public List<ActionPlan> parseTextMultiple(String text, String matchedKeyword, String contextDescriptor) {
         if (actionParser == null || text == null || text.trim().isEmpty()) {
             return Collections.emptyList();
         }
-        return actionParser.parseMultiple(text.trim(), matchedKeyword);
+        return actionParser.parseMultiple(text.trim(), matchedKeyword, contextDescriptor);
     }
 
     public List<ActionPlan> parseOcrMultiple(OcrResult ocrResult, String matchedKeyword) {
+        return parseOcrMultiple(ocrResult, matchedKeyword, null);
+    }
+
+    /**
+     * 带情境感知的 OCR 多意图解析。contextDescriptor 由 ContextEnricher 生成。
+     */
+    public List<ActionPlan> parseOcrMultiple(OcrResult ocrResult, String matchedKeyword,
+                                             String contextDescriptor) {
         if (actionParser == null || ocrResult == null) {
             return Collections.emptyList();
         }
-        return actionParser.parseMultipleWithFilter(ocrResult, matchedKeyword);
+        return actionParser.parseMultipleWithFilter(ocrResult, matchedKeyword, contextDescriptor);
     }
 
     public ActionExecutor.ExecutionResult execute(ActionPlan plan) {

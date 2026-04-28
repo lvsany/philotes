@@ -32,11 +32,13 @@ import androidx.core.app.NotificationCompat;
 import com.example.philotes.data.model.ActionPlan;
 import com.example.philotes.data.model.OcrResult;
 import com.example.philotes.data.api.RoutedLlmService;
-import com.example.philotes.domain.ActionParser;
 import com.example.philotes.domain.ActionExecutor;
+import com.example.philotes.domain.ActionParser;
+import com.example.philotes.domain.PrivacyFirewall;
 import com.example.philotes.domain.RuleEngine;
 import com.example.philotes.input.MultimodalInputCoordinator;
 import com.example.philotes.ui.AiStateOrbView;
+import com.example.philotes.utils.ContextEnricher;
 import com.example.philotes.utils.PaddleOcrService;
 
 import java.io.File;
@@ -91,6 +93,10 @@ public class FloatingButtonService extends AccessibilityService {
     private String lastMatchedKeyword = "";
     private RuleEngine ruleEngine;
 
+    // 情境感知：追踪当前前台应用包名
+    private String currentFrontPackage = "";
+
+
     private View layoutPlanNav;
     private TextView tvPlanIndicator;
 
@@ -111,6 +117,14 @@ public class FloatingButtonService extends AccessibilityService {
         if (eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
                 && eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return;
+        }
+
+        // 追踪当前前台应用包名，供隐私防火墙与情境感知使用
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            CharSequence pkg = event.getPackageName();
+            if (pkg != null && pkg.length() > 0) {
+                currentFrontPackage = pkg.toString();
+            }
         }
 
         lastUiEventAt = SystemClock.uptimeMillis();
@@ -172,13 +186,15 @@ public class FloatingButtonService extends AccessibilityService {
         if (ruleEngine == null) {
             return;
         }
-        List<String> keywords = new ArrayList<>();
+        // 先加载默认关键词，再追加用户自定义词（合并模式，防止用户配置覆盖默认规则）
+        ruleEngine.resetDefaultRules();
+        List<String> customKeywords = new ArrayList<>();
         for (String kw : settingsManager.getCustomTriggerKeywords()) {
             if (kw != null && !kw.trim().isEmpty()) {
-                keywords.add(kw.trim().toLowerCase());
+                customKeywords.add(kw.trim().toLowerCase());
             }
         }
-        ruleEngine.updateRules(keywords, Collections.emptyList());
+        ruleEngine.addCustomKeywords(customKeywords);
     }
 
     private void initFloatingView() {
@@ -506,11 +522,25 @@ public class FloatingButtonService extends AccessibilityService {
             return;
         }
 
+        // === 动态隐私防火墙 ===
+        PrivacyFirewall.PrivacyLevel privacyLevel =
+            PrivacyFirewall.check(currentFrontPackage, mergedText);
+        if (privacyLevel == PrivacyFirewall.PrivacyLevel.SENSITIVE) {
+            Log.i(TAG, "PrivacyFirewall: SENSITIVE content detected, cloud requests blocked");
+            showInlineBanner("🔒 隐私保护：本次推理已强制使用本地模型");
+            // 仅在本地模型可用时继续，否则跳过
+        }
+
+        // === 情境感知：构建设备状态描述符 ===
+        String contextDescriptor = ContextEnricher.buildContextDescriptor(this, currentFrontPackage);
+        Log.d(TAG, "ContextDescriptor: " + contextDescriptor.replace("\n", " | "));
+
         setOrbState(AiStateOrbView.State.THINKING);
 
         new Thread(() -> {
             try {
-                List<ActionPlan> plans = inputCoordinator.parseTextMultiple(mergedText, lastMatchedKeyword);
+                List<ActionPlan> plans = inputCoordinator.parseTextMultiple(
+                        mergedText, lastMatchedKeyword, contextDescriptor);
                 if (plans.isEmpty()) {
                     mainHandler.post(() -> trySilentOcrFallback(fingerprint));
                     return;
@@ -632,9 +662,11 @@ public class FloatingButtonService extends AccessibilityService {
 
                 new Thread(() -> {
                     try {
+                        String ctxDesc = ContextEnricher.buildContextDescriptor(
+                                FloatingButtonService.this, currentFrontPackage);
                         List<ActionPlan> plans = inputCoordinator == null
                                 ? Collections.emptyList()
-                                : inputCoordinator.parseOcrMultiple(result, lastMatchedKeyword);
+                                : inputCoordinator.parseOcrMultiple(result, lastMatchedKeyword, ctxDesc);
                         if (plans.isEmpty()) {
                             onSilentFallbackCompletedWithoutAction();
                             return;
@@ -1035,9 +1067,10 @@ public class FloatingButtonService extends AccessibilityService {
             try {
                 Log.d(TAG, "Starting AI analysis");
 
+                String ctxDesc = ContextEnricher.buildContextDescriptor(this, currentFrontPackage);
                 List<ActionPlan> plans = inputCoordinator == null
                         ? Collections.emptyList()
-                        : inputCoordinator.parseOcrMultiple(ocrResult, lastMatchedKeyword);
+                        : inputCoordinator.parseOcrMultiple(ocrResult, lastMatchedKeyword, ctxDesc);
 
                 Log.d(TAG, "AI analysis result: " + plans.size() + " plans");
 
